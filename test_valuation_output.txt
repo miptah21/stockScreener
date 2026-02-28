@@ -1,0 +1,40 @@
+
+═══ Bank Subsector ═══
+  [PASS] Bank default COE = 10%
+  [PASS] Bank icon = 🏦
+  [PASS] Bank title = Bank Valuation
+  [PASS] Bank Fair PBV = ROE/COE = 1.5
+  [PASS] Bank Undervalued (PBV 1.0 < Fair 1.5*0.8=1.2)
+  [PASS] Bank BUY (ROE > COE)
+
+═══ Insurance Subsector ═══
+  [PASS] Insurance default COE = 12%
+  [PASS] Insurance icon = 🛡️
+  [PASS] Insurance title
+  [PASS] Insurance Fair PBV = 0.18/0.12 = 1.5
+
+═══ Leasing Subsector ═══
+  [PASS] Leasing default COE = 13%
+  [PASS] Leasing icon = 🏢
+  [PASS] Leasing title
+  [PASS] Leasing Value Trap (ROE < COE, Undervalued)
+  [PASS] Leasing entity in Premium desc
+
+═══ Securities Subsector ═══
+  [PASS] Securities default COE = 14%
+  [PASS] Securities icon = 📊
+  [PASS] Securities title
+  [PASS] Securities ROE trend Menurun (0.20 < 0.22*0.95)
+
+═══ Edge Cases ═══
+  [PASS] None PBV → not available
+  [PASS] None PBV still has icon
+  [PASS] None ROE → not available
+  [PASS] None ROE still has icon
+
+═══ Custom COE Override ═══
+  [PASS] Custom COE overrides default
+  [PASS] Fair PBV uses custom COE
+========================================
+TOTAL: 25 passed, 0 failed
+All tests passed!

@@ -1,0 +1,428 @@
+{
+  "bank_valuation": {
+    "actual_pbv": 3.146711627378945,
+    "available": true,
+    "g": 0.05,
+    "justified_pbv": 3.13208,
+    "ke": 0.1,
+    "method": "Justified PBV (Gordon Growth)",
+    "roe_used": 0.206604,
+    "upside": -0.004649815144050005,
+    "verdict": "Fair Valued"
+  },
+  "company": {
+    "currency": "IDR",
+    "current_price": 7200.0,
+    "industry": "Banks - Regional",
+    "market_cap": 885693794484224.0,
+    "name": "PT Bank Central Asia Tbk",
+    "pbv": 3.146711,
+    "sector": "Financial Services"
+  },
+  "data": [
+    {
+      "date": "2025-12-31",
+      "metrics": {
+        "accrual": -0.012586,
+        "asset_turnover": 0.072043,
+        "bopo": 0.307,
+        "car": 0.266,
+        "casa": 0.85,
+        "cash_flow": 77508785000000.0,
+        "coc": 0.004,
+        "cost_of_funds": 0.008011,
+        "coverage": 1.838,
+        "coverage_ratio": 1.838,
+        "current_ratio": null,
+        "der": 4.636932,
+        "expense_ratio": 0.342205,
+        "gross_margin": null,
+        "ldr": 0.77,
+        "loss_ratio": null,
+        "lt_debt_ratio": 0.00151,
+        "mkbd_proxy": 0.177377,
+        "net_income": 57537287000000.0,
+        "net_margin": 0.503302,
+        "nim": 0.057,
+        "npf_proxy": null,
+        "npl": 0.017,
+        "roa": 0.036259,
+        "roe": 0.20442,
+        "source": "BCA FY2025 Results",
+        "year": 2025
+      },
+      "raw": {
+        "cash_financial": 90907332000000.0,
+        "current_assets": null,
+        "current_liabilities": null,
+        "gross_profit": null,
+        "interest_expense": 10455461000000.0,
+        "interest_income": 87715636000000.0,
+        "long_term_debt": 2395446000000.0,
+        "net_income": 57537287000000.0,
+        "net_policyholder_claims": null,
+        "operating_cashflow": 77508785000000.0,
+        "operating_income": 114319648000000.0,
+        "retained_earnings": 258920057000000.0,
+        "shares_outstanding": 123013033200.0,
+        "total_assets": 1586828536000000.0,
+        "total_deposits": null,
+        "total_equity": 281466478000000.0,
+        "total_liabilities": 1305140981000000.0,
+        "total_loans": null,
+        "total_operating_expense": 39120784000000.0,
+        "total_revenue": 114319648000000.0,
+        "write_off": -1085417000000.0
+      },
+      "year": "2025"
+    },
+    {
+      "date": "2024-12-31",
+      "metrics": {
+        "accrual": 0.000701,
+        "asset_turnover": 0.075068,
+        "bopo": 0.4,
+        "car": 0.29,
+        "casa": 0.82,
+        "cash_flow": 53820229000000.0,
+        "coc": 0.005,
+        "cost_of_funds": 0.008332,
+        "coverage": 2.3,
+        "coverage_ratio": 2.3,
+        "current_ratio": null,
+        "der": 4.517451,
+        "expense_ratio": 0.354353,
+        "gross_margin": null,
+        "ldr": 0.78,
+        "loss_ratio": null,
+        "lt_debt_ratio": 0.002101,
+        "mkbd_proxy": 0.181219,
+        "net_income": 54836305000000.0,
+        "net_margin": 0.504026,
+        "nim": 0.055,
+        "npf_proxy": null,
+        "npl": 0.019,
+        "roa": 0.037836,
+        "roe": 0.208788,
+        "source": "BCA FY2024 Results",
+        "year": 2024
+      },
+      "raw": {
+        "cash_financial": 88618295000000.0,
+        "current_assets": null,
+        "current_liabilities": null,
+        "gross_profit": null,
+        "interest_expense": 9885265000000.0,
+        "interest_income": 84360786000000.0,
+        "long_term_debt": 3044409000000.0,
+        "net_income": 54836305000000.0,
+        "net_policyholder_claims": null,
+        "operating_cashflow": 53820229000000.0,
+        "operating_income": 108796625000000.0,
+        "retained_earnings": 239958882000000.0,
+        "shares_outstanding": 123275050000.0,
+        "total_assets": 1449301328000000.0,
+        "total_deposits": null,
+        "total_equity": 262640621000000.0,
+        "total_liabilities": 1186466241000000.0,
+        "total_loans": null,
+        "total_operating_expense": 38552392000000.0,
+        "total_revenue": 108796625000000.0,
+        "write_off": -835820000000.0
+      },
+      "year": "2024"
+    },
+    {
+      "date": "2023-12-31",
+      "metrics": {
+        "accrual": -0.006693,
+        "asset_turnover": 0.071362,
+        "bopo": 0.393127,
+        "cash_flow": 58063775000000.0,
+        "coc": 0.00086,
+        "cost_of_funds": 0.00835,
+        "current_ratio": null,
+        "der": 4.809323,
+        "expense_ratio": 0.393127,
+        "gross_margin": null,
+        "loss_ratio": null,
+        "lt_debt_ratio": 0.001681,
+        "mkbd_proxy": 0.172115,
+        "net_income": 48639122000000.0,
+        "net_margin": 0.484039,
+        "nim": 0.047808,
+        "npf_proxy": null,
+        "roa": 0.034542,
+        "roe": 0.200693
+      },
+      "raw": {
+        "cash_financial": 127933638000000.0,
+        "current_assets": null,
+        "current_liabilities": null,
+        "gross_profit": null,
+        "interest_expense": 9731953000000.0,
+        "interest_income": 77050359000000.0,
+        "long_term_debt": 2366393000000.0,
+        "net_income": 48639122000000.0,
+        "net_policyholder_claims": null,
+        "operating_cashflow": 58063775000000.0,
+        "operating_income": 100485975000000.0,
+        "retained_earnings": 219723216000000.0,
+        "shares_outstanding": 123275050000.0,
+        "total_assets": 1408107010000000.0,
+        "total_deposits": null,
+        "total_equity": 242356256000000.0,
+        "total_liabilities": 1165569417000000.0,
+        "total_loans": null,
+        "total_operating_expense": 39503700000000.0,
+        "total_revenue": 100485975000000.0,
+        "write_off": -1210427000000.0
+      },
+      "year": "2023"
+    },
+    {
+      "date": "2022-12-31",
+      "metrics": {
+        "accrual": 0.005291,
+        "asset_turnover": 0.068093,
+        "bopo": 0.385834,
+        "cash_flow": 33779263000000.0,
+        "coc": 3.4e-05,
+        "cost_of_funds": 0.005498,
+        "current_ratio": null,
+        "der": 4.947774,
+        "expense_ratio": 0.385834,
+        "gross_margin": null,
+        "loss_ratio": null,
+        "lt_debt_ratio": 0.001602,
+        "mkbd_proxy": 0.168109,
+        "net_income": 40735722000000.0,
+        "net_margin": 0.455028,
+        "nim": 0.0454,
+        "npf_proxy": null,
+        "roa": 0.030984,
+        "roe": 0.184309
+      },
+      "raw": {
+        "cash_financial": 161598872000000.0,
+        "current_assets": null,
+        "current_liabilities": null,
+        "gross_profit": null,
+        "interest_expense": 6012580000000.0,
+        "interest_income": 65701870000000.0,
+        "long_term_debt": 2105543000000.0,
+        "net_income": 40735722000000.0,
+        "net_policyholder_claims": null,
+        "operating_cashflow": 33779263000000.0,
+        "operating_income": 89523508000000.0,
+        "retained_earnings": 198132066000000.0,
+        "shares_outstanding": 123275050000.0,
+        "total_assets": 1314731674000000.0,
+        "total_deposits": null,
+        "total_equity": 221018606000000.0,
+        "total_liabilities": 1093550019000000.0,
+        "total_loans": null,
+        "total_operating_expense": 34541198000000.0,
+        "total_revenue": 89523508000000.0,
+        "write_off": -44270000000.0
+      },
+      "year": "2022"
+    }
+  ],
+  "financial_subsector": "bank",
+  "financial_valuation": {
+    "actual_pbv": 3.146711627378945,
+    "available": true,
+    "g": 0.05,
+    "justified_pbv": 3.13208,
+    "ke": 0.1,
+    "method": "Justified PBV (Gordon Growth)",
+    "roe_used": 0.206604,
+    "upside": -0.004649815144050005,
+    "verdict": "Fair Valued"
+  },
+  "is_bank": true,
+  "metrics_info": {
+    "accrual": {
+      "description": "Mengukur seberapa besar laba didukung oleh arus kas. Nilai negatif menunjukkan kualitas laba yang lebih baik.",
+      "formula": "(Net Income - Operating Cash Flow) / Total Assets",
+      "good_direction": "lower",
+      "name": "Kualitas Laba (Accrual Ratio)"
+    },
+    "bopo": {
+      "description": "Mengukur efisiensi operasional bank. Semakin rendah semakin efisien. Standar sehat: < 85%.",
+      "formula": "Total Operating Expense / Operating Income",
+      "good_direction": "lower",
+      "name": "BOPO (Cost-to-Income)"
+    },
+    "car": {
+      "description": "Rasio kecukupan modal. Semakin tinggi semakin kuat (min 8-10%).",
+      "formula": "Modal / ATMR",
+      "good_direction": "higher",
+      "name": "Capital Adequacy Ratio (CAR)"
+    },
+    "casa": {
+      "description": "Rasio dana murah. Semakin tinggi semakin efisien.",
+      "formula": "(Giro + Tabungan) / Total DPK",
+      "good_direction": "higher",
+      "name": "CASA Ratio"
+    },
+    "cash_flow": {
+      "description": "Arus kas dari aktivitas operasional utama perusahaan.",
+      "formula": "Direct from Cash Flow Statement",
+      "good_direction": "higher",
+      "name": "Operating Cash Flow"
+    },
+    "coc": {
+      "description": "Proxy biaya pencadangan kredit. Semakin rendah, kualitas kredit semakin baik. Idealnya < 1%.",
+      "formula": "|Write Off| / Total Assets",
+      "good_direction": "lower",
+      "name": "Cost of Credit (CoC)"
+    },
+    "cost_of_funds": {
+      "description": "Biaya dana. Semakin rendah indikasi CASA tinggi.",
+      "formula": "Interest Expense / Total Liabilities",
+      "good_direction": "lower",
+      "name": "Cost of Funds (CoF)"
+    },
+    "coverage_ratio": {
+      "description": "Rasio pencadangan. Semakin tinggi semakin aman (>100% sangat baik).",
+      "formula": "Cadangan Kerugian / NPL",
+      "good_direction": "higher",
+      "name": "Coverage Ratio (CKPN)"
+    },
+    "ldr": {
+      "description": "Rasio likuiditas. Idealnya rentang 78% - 92%.",
+      "formula": "Total Kredit / DPK",
+      "good_direction": "optimal",
+      "name": "Loan to Deposit Ratio (LDR)"
+    },
+    "lt_debt_ratio": {
+      "description": "Mengukur proporsi aset yang dibiayai oleh utang jangka panjang.",
+      "formula": "Long Term Debt / Total Assets",
+      "good_direction": "lower",
+      "name": "Rasio Utang Jangka Panjang"
+    },
+    "net_income": {
+      "description": "Laba bersih perusahaan setelah dikurangi semua biaya.",
+      "formula": "Direct from Income Statement",
+      "good_direction": "higher",
+      "name": "Net Income"
+    },
+    "nim": {
+      "description": "Mengukur selisih pendapatan bunga dan beban bunga relatif terhadap total aset. Metrik utama profitabilitas bank.",
+      "formula": "(Interest Income - Interest Expense) / Total Assets",
+      "good_direction": "higher",
+      "name": "Net Interest Margin (NIM)"
+    },
+    "npl": {
+      "description": "Rasio kredit bermasalah. Semakin rendah semakin baik (sehat < 5%).",
+      "formula": "NPL Gross (OJK/Laporan Tahunan)",
+      "good_direction": "lower",
+      "name": "Non-Performing Loan (NPL)"
+    },
+    "roa": {
+      "description": "Mengukur efisiensi perusahaan dalam menggunakan asetnya untuk menghasilkan laba.",
+      "formula": "Net Income / Total Assets",
+      "good_direction": "higher",
+      "name": "Return on Assets (ROA)"
+    },
+    "roe": {
+      "description": "Mengukur kemampuan bank menghasilkan laba dari ekuitas pemegang saham. Metrik valuasi kunci untuk bank.",
+      "formula": "Net Income / Total Equity",
+      "good_direction": "higher",
+      "name": "Return on Equity (ROE)"
+    }
+  },
+  "piotroski": {
+    "available": true,
+    "criteria": [
+      {
+        "category": "Profitabilitas",
+        "description": "ROA (avg assets) = 3.79%. Harus positif.",
+        "id": 1,
+        "name": "ROA Positif",
+        "passed": true
+      },
+      {
+        "category": "Profitabilitas",
+        "description": "ROA (avg assets): 3.79% vs 3.84%. Harus meningkat.",
+        "id": 2,
+        "name": "ROA Meningkat",
+        "passed": false
+      },
+      {
+        "category": "Efisiensi Pendanaan",
+        "description": "CASA: 85.00%. Sehat (\u2265 50%).",
+        "id": 3,
+        "name": "CASA Ratio Meningkat / Tinggi",
+        "passed": true
+      },
+      {
+        "category": "Kualitas Aset",
+        "description": "NPL Gross: 1.70%. Sehat (< 5%).",
+        "id": 4,
+        "name": "NPL Gross < 5% (atau Menurun)",
+        "passed": true
+      },
+      {
+        "category": "Kualitas Aset",
+        "description": "Cost of Credit: 0.40%. Baik (\u2264 2%).",
+        "id": 5,
+        "name": "CoC Rendah / Stabil",
+        "passed": true
+      },
+      {
+        "category": "Solvabilitas",
+        "description": "CAR: 26.60%. Kuat (\u2265 12%).",
+        "id": 6,
+        "name": "CAR (Capital Adequacy) Kuat / Meningkat",
+        "passed": true
+      },
+      {
+        "category": "Solvabilitas",
+        "description": "Coverage: 183.80%. Aman (> 100%).",
+        "id": 7,
+        "name": "Coverage Ratio > 100% / Meningkat",
+        "passed": true
+      },
+      {
+        "category": "Profitabilitas Bank",
+        "description": "NIM: 5.70% vs 5.50%. Meningkat.",
+        "id": 8,
+        "name": "NIM Meningkat / Stabil",
+        "passed": true
+      },
+      {
+        "category": "Likuiditas",
+        "description": "LDR: 77.00%. Sehat (\u2264 92%).",
+        "id": 9,
+        "name": "LDR Sehat (\u2264 92%) / Membaik",
+        "passed": true
+      },
+      {
+        "category": "Efisiensi Operasional",
+        "description": "BOPO: 30.70% vs 40.00%. Membaik (turun).",
+        "id": 10,
+        "name": "BOPO Menurun / Efisien",
+        "passed": true
+      }
+    ],
+    "current_year": "2025",
+    "max_score": 10,
+    "previous_year": "2024",
+    "score": 9,
+    "score_label": "Bank Quality Score",
+    "score_type": "bank",
+    "strength": "Sangat Kuat",
+    "strength_color": "emerald"
+  },
+  "success": true,
+  "ticker": "BBCA.JK",
+  "years": [
+    "2025",
+    "2024",
+    "2023",
+    "2022"
+  ]
+}

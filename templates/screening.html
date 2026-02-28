@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Screening — Annual Report Scanner</title>
+    <meta name="description" content="Scan saham yang sudah menerbitkan laporan keuangan tahunan di tahun ini.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.06);
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f0f0f0;
+            --text-secondary: #8b8b9e;
+            --text-muted: #5a5a6e;
+            --accent-blue: #6366f1;
+            --accent-purple: #a855f7;
+            --accent-cyan: #22d3ee;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --gradient-primary: linear-gradient(135deg, #6366f1, #a855f7);
+            --gradient-hero: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: 
+                radial-gradient(circle at 30% 20%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 70% 80%, rgba(99, 102, 241, 0.06) 0%, transparent 50%);
+            z-index: 0;
+            animation: bgPulse 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgPulse {
+            0% { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.05) rotate(2deg); }
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Navigation */
+        .nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--glass-border);
+            margin-bottom: 20px;
+        }
+
+        .nav__brand {
+            font-size: 16px;
+            font-weight: 700;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+        }
+
+        .nav__links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav__link {
+            padding: 8px 20px;
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .nav__link--default {
+            color: var(--text-secondary);
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+        }
+
+        .nav__link--default:hover {
+            color: var(--text-primary);
+            background: var(--bg-card-hover);
+        }
+
+        .nav__link--active {
+            color: white;
+            background: var(--gradient-primary);
+            border: 1px solid transparent;
+        }
+
+        /* Header */
+        .header {
+            padding: 30px 0 10px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 36px;
+            font-weight: 800;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 15px;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Stock List Selection */
+        .list-section {
+            padding: 30px 0;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 22px;
+            background: var(--gradient-primary);
+            border-radius: 2px;
+        }
+
+        .list-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .list-card {
+            background: var(--bg-card);
+            border: 2px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 22px;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .list-card:hover {
+            background: var(--bg-card-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .list-card.selected {
+            border-color: var(--accent-blue);
+            background: rgba(99, 102, 241, 0.06);
+        }
+
+        .list-card.selected::after {
+            content: '✓';
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            width: 24px;
+            height: 24px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: white;
+            font-weight: 700;
+        }
+
+        .list-card__name {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .list-card__desc {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .list-card__count {
+            display: inline-block;
+            padding: 3px 10px;
+            background: var(--glass);
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        /* Custom Tickers Input */
+        .custom-section {
+            margin-bottom: 24px;
+        }
+
+        .custom-input {
+            width: 100%;
+            padding: 14px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: 'Inter', monospace;
+            font-size: 14px;
+            outline: none;
+            transition: var(--transition);
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .custom-input::placeholder { color: var(--text-muted); }
+        .custom-input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        .custom-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        /* Scan Button */
+        .scan-bar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0 30px;
+        }
+
+        .scan-btn {
+            padding: 14px 40px;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .scan-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.35);
+        }
+
+        .scan-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Progress */
+        .progress-section {
+            display: none;
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .progress-section.active { display: block; }
+
+        .progress-bar-wrap {
+            max-width: 500px;
+            margin: 0 auto 16px;
+            background: var(--glass);
+            border-radius: 100px;
+            height: 8px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--gradient-primary);
+            border-radius: 100px;
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: progressPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes progressPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .progress-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Error */
+        .error-box {
+            display: none;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 16px 20px;
+            background: rgba(244, 63, 94, 0.08);
+            border: 1px solid rgba(244, 63, 94, 0.2);
+            border-radius: var(--radius-sm);
+            color: var(--accent-rose);
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .error-box.active { display: block; }
+
+        /* Results */
+        .results { display: none; padding-bottom: 60px; }
+        .results.active { display: block; animation: fadeIn 0.5s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 14px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-card__value {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .stat-card__label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card--emerald .stat-card__value { color: var(--accent-emerald); }
+        .stat-card--rose .stat-card__value { color: var(--accent-rose); }
+        .stat-card--blue .stat-card__value { color: var(--accent-blue); }
+        .stat-card--amber .stat-card__value { color: var(--accent-amber); }
+
+        /* Results Table */
+        .results-table-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .results-table-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .results-table-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 6px;
+        }
+
+        .filter-tab {
+            padding: 6px 16px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+        }
+
+        .filter-tab:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        .filter-tab.active {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: transparent;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .results-table thead th {
+            padding: 12px 20px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .results-table thead th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: var(--transition);
+        }
+
+        .results-table thead th.sortable:hover {
+            color: var(--accent-cyan);
+        }
+
+        .results-table thead th.sortable .sort-arrow {
+            display: inline-block;
+            margin-left: 4px;
+            font-size: 10px;
+            opacity: 0.4;
+            transition: var(--transition);
+        }
+
+        .results-table thead th.sortable.sort-active .sort-arrow {
+            opacity: 1;
+            color: var(--accent-cyan);
+        }
+
+        .results-table tbody td {
+            padding: 14px 20px;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+        }
+
+        .results-table tbody tr {
+            transition: var(--transition);
+        }
+
+        .results-table tbody tr:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .results-table tbody td:first-child {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .ticker-link {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-weight: 700;
+            transition: var(--transition);
+        }
+
+        .ticker-link:hover {
+            color: var(--accent-blue);
+            text-decoration: underline;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge--yes {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--accent-emerald);
+        }
+
+        .badge--no {
+            background: rgba(244, 63, 94, 0.08);
+            color: var(--accent-rose);
+        }
+
+        .badge--error {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--accent-amber);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 26px; }
+            .list-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .results-table { font-size: 12px; }
+            .results-table thead th, .results-table tbody td { padding: 10px 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Nav -->
+    <nav class="nav">
+        <a href="/" class="nav__brand">📊 Finance Scraper</a>
+        <div class="nav__links">
+            <a href="/" class="nav__link nav__link--default">Dashboard</a>
+            <a href="/screening" class="nav__link nav__link--active">Screening</a>
+            <a href="/technical-screening" class="nav__link nav__link--default">Teknikal</a>
+            <a href="/avg-price" class="nav__link nav__link--default">Rata-Rata Harga</a>
+            <a href="/ownership" class="nav__link nav__link--default">Ownership</a>
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="header">
+        <h1>📋 Stock Screening</h1>
+        <p>Scan daftar saham untuk menemukan perusahaan yang sudah menerbitkan laporan keuangan tahunan tahun <strong id="targetYearLabel"></strong>.</p>
+    </header>
+
+    <!-- Stock List Selection -->
+    <section class="list-section">
+        <div class="section-title">Pilih Daftar Saham</div>
+        <div id="listGrid" class="list-grid"></div>
+
+        <div class="section-title" style="margin-top: 24px;">Atau Input Ticker Manual</div>
+        <div class="custom-section">
+            <textarea id="customTickers" class="custom-input" placeholder="Masukkan ticker dipisah koma, cth: AAPL, MSFT, BBCA.JK, TLKM.JK"></textarea>
+            <div class="custom-label">Pisahkan setiap ticker dengan koma. Akan mengabaikan pilihan daftar di atas jika diisi.</div>
+        </div>
+
+        <div class="scan-bar">
+            <button id="scanBtn" class="scan-btn" onclick="startScan()">🔍 Mulai Scanning</button>
+        </div>
+    </section>
+
+    <!-- Progress -->
+    <div id="progressSection" class="progress-section">
+        <div class="progress-bar-wrap">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p class="progress-text" id="progressText">Memindai saham...</p>
+    </div>
+
+    <!-- Error -->
+    <div id="errorBox" class="error-box"></div>
+
+    <!-- Results -->
+    <div id="results" class="results">
+        <div class="section-title" id="resultsTitle">Hasil Screening</div>
+
+        <div id="statsGrid" class="stats-grid"></div>
+
+        <div class="results-table-wrap">
+            <div class="results-table-header">
+                <h3 id="tableTitle">📄 Daftar Saham</h3>
+                <div class="filter-tabs">
+                    <span class="filter-tab active" onclick="filterResults('all')">Semua</span>
+                    <span class="filter-tab" onclick="filterResults('yes')">✅ Sudah Lapor</span>
+                    <span class="filter-tab" onclick="filterResults('no')">❌ Belum Lapor</span>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Ticker</th>
+                            <th>Perusahaan</th>
+                            <th>Sektor</th>
+                            <th class="sortable" onclick="sortResults('price')" id="thPrice">Harga <span class="sort-arrow">▲▼</span></th>
+                            <th class="sortable" onclick="sortResults('market_cap')" id="thMarketCap">Market Cap <span class="sort-arrow">▲▼</span></th>
+                            <th>Laporan Terakhir</th>
+                            <th class="sortable" onclick="sortResults('status')" id="thStatus">Status <span class="sort-arrow">▲▼</span></th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a> via yfinance library.</p>
+        <p style="margin-top: 6px;">Built with Flask + yfinance · © 2026</p>
+    </footer>
+</div>
+
+</script>
+<script>
+    let selectedList = null;
+    let allResults = [];
+    let originalResults = []; // Store original order for neutral sort
+    let currentFilter = 'all';
+    let currentSort = { key: null, state: 0 }; // 0: Neutral, 1: Asc, 2: Desc
+
+    // Init
+    document.getElementById('targetYearLabel').textContent = new Date().getFullYear() - 1;
+    loadStockLists();
+
+    async function loadStockLists() {
+        try {
+            const r = await fetch('/api/stock-lists');
+            const data = await r.json();
+            if (data.success) {
+                renderListCards(data.lists);
+            }
+        } catch (e) {
+            console.error('Failed to load stock lists', e);
+        }
+    }
+
+    function renderListCards(lists) {
+        const grid = document.getElementById('listGrid');
+        const icons = {
+            'idx_lq45': '🏆',
+            'idx_finansial': '🏦',
+            'idx_mineral_energi': '⛏️',
+            'idx_mineral_non_energi': '🪨',
+            'idx_utilitas': '⚡',
+            'idx_industri_proses': '🏭',
+            'idx_layanan_teknologi': '💻',
+            'idx_komunikasi': '📡',
+            'idx_konsumen_tidak_tahan_lama': '🛒',
+            'idx_layanan_kesehatan': '🏥',
+            'idx_layanan_konsumen': '🛍️',
+            'idx_transportasi': '✈️',
+            'idx_perdagangan_ritel': '🏪',
+            'idx_produsen_pabrikan': '🔧',
+            'idx_layanan_industri': '🏗️',
+            'idx_layanan_distribusi': '🚚',
+            'idx_teknologi_kesehatan': '💊',
+            'idx_konsumen_tahan_lama': '🚗',
+            'idx_layanan_komersil': '📋',
+            'idx_lain_lain': '📦',
+            'idx_teknologi_elektronik': '🔌',
+
+            'sp500_top50': '🇺🇸',
+        };
+
+        // Group by market
+        const idxLists = Object.entries(lists).filter(([k, v]) => v.market === 'IDX');
+        const otherLists = Object.entries(lists).filter(([k, v]) => v.market !== 'IDX');
+
+        let html = '';
+
+        // IDX section
+        html += '<div style="grid-column:1/-1;margin-top:4px;"><div class="section-title" style="margin-bottom:8px;">🇮🇩 Bursa Efek Indonesia (IDX)</div></div>';
+        html += idxLists.map(([key, list]) => `
+            <div class="list-card" data-key="${key}" onclick="selectList('${key}')">
+                <div class="list-card__name">${icons[key] || '📋'} ${list.name}</div>
+                <div class="list-card__desc">${list.description}</div>
+                <span class="list-card__count">${list.count} saham</span>
+            </div>
+        `).join('');
+
+        // International section
+        if (otherLists.length > 0) {
+            html += '<div style="grid-column:1/-1;margin-top:16px;"><div class="section-title" style="margin-bottom:8px;">🌍 International</div></div>';
+            html += otherLists.map(([key, list]) => `
+                <div class="list-card" data-key="${key}" onclick="selectList('${key}')">
+                    <div class="list-card__name">${icons[key] || '📋'} ${list.name}</div>
+                    <div class="list-card__desc">${list.description}</div>
+                    <span class="list-card__count">${list.count} saham</span>
+                </div>
+            `).join('');
+        }
+
+        grid.innerHTML = html;
+    }
+
+    function selectList(key) {
+        selectedList = (selectedList === key) ? null : key;
+        document.querySelectorAll('.list-card').forEach(card => {
+            card.classList.toggle('selected', card.dataset.key === selectedList);
+        });
+        // Clear custom input when selecting a predefined list
+        if (selectedList) {
+            document.getElementById('customTickers').value = '';
+        }
+    }
+
+    async function startScan() {
+        const customText = document.getElementById('customTickers').value.trim();
+        
+        let fetchUrl, fetchOptions;
+
+        if (customText) {
+            // Use custom tickers
+            const tickers = customText.split(',').map(t => t.trim()).filter(t => t);
+            if (tickers.length === 0) {
+                showError('Masukkan minimal satu ticker.');
+                return;
+            }
+            fetchUrl = '/api/screen';
+            fetchOptions = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ list: 'custom', tickers: tickers })
+            };
+        } else if (selectedList) {
+            fetchUrl = `/api/screen?list=${selectedList}`;
+            fetchOptions = { method: 'GET' };
+        } else {
+            showError('Pilih daftar saham atau masukkan ticker manual terlebih dahulu.');
+            return;
+        }
+
+        const btn = document.getElementById('scanBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Scanning...';
+        hideError();
+        document.getElementById('results').classList.remove('active');
+        showProgress();
+
+        try {
+            const r = await fetch(fetchUrl, fetchOptions);
+            const data = await r.json();
+
+            if (!data.success) {
+                showError(data.error || 'Gagal melakukan screening.');
+                return;
+            }
+
+            allResults = data.results;
+            originalResults = [...data.results]; // Backup for neutral sort
+            renderResults(data);
+        } catch (e) {
+            showError('Gagal terhubung ke server.');
+            console.error(e);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔍 Mulai Scanning';
+            hideProgress();
+        }
+    }
+
+    function renderResults(data) {
+        // Stats
+        document.getElementById('statsGrid').innerHTML = `
+            <div class="stat-card stat-card--blue">
+                <div class="stat-card__value">${data.total_scanned}</div>
+                <div class="stat-card__label">Total Dipindai</div>
+            </div>
+            <div class="stat-card stat-card--emerald">
+                <div class="stat-card__value">${data.with_report_count}</div>
+                <div class="stat-card__label">Sudah Lapor ${data.target_year}</div>
+            </div>
+            <div class="stat-card stat-card--rose">
+                <div class="stat-card__value">${data.without_report_count}</div>
+                <div class="stat-card__label">Belum Lapor</div>
+            </div>
+            <div class="stat-card stat-card--amber">
+                <div class="stat-card__value">${data.error_count}</div>
+                <div class="stat-card__label">Error</div>
+            </div>
+        `;
+
+        document.getElementById('resultsTitle').innerHTML = `Hasil Screening — ${data.list_name}`;
+        document.getElementById('tableTitle').textContent = `📄 ${data.list_name} (Laporan Tahun ${data.target_year})`;
+
+        currentFilter = 'all';
+        document.querySelectorAll('.filter-tab').forEach((tab, i) => {
+            tab.classList.toggle('active', i === 0);
+        });
+
+        // Reset sort on new scan
+        currentSort = { key: null, state: 0 };
+        resetSortIcons();
+
+        renderTable(allResults);
+        document.getElementById('results').classList.add('active');
+    }
+
+    function renderTable(results) {
+        const tbody = document.getElementById('resultsBody');
+        tbody.innerHTML = '';
+
+        const filtered = results.filter(r => {
+            if (currentFilter === 'yes') return r.has_current_year_report;
+            if (currentFilter === 'no') return !r.has_current_year_report;
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;">Tidak ada data yang cocok.</td></tr>';
+            return;
+        }
+
+        filtered.forEach((r, i) => {
+            const tr = document.createElement('tr');
+            
+            // Format Market Cap
+            let mcapDisplay = '-';
+            if (r.market_cap) {
+                mcapDisplay = formatMarketCap(r.market_cap, r.currency);
+            }
+
+            // Format Price
+            let priceDisplay = '-';
+            if (r.price) {
+                priceDisplay = formatPrice(r.price, r.currency);
+            }
+
+            // Status Badge
+            let statusBadge = '';
+            if (r.status === 'error') {
+                statusBadge = `<span class="badge badge--error">Error</span>`;
+            } else if (r.has_current_year_report) {
+                statusBadge = `<span class="badge badge--yes">Sudah Lapor</span>`;
+            } else {
+                statusBadge = `<span class="badge badge--no">Belum Lapor</span>`;
+            }
+
+            let reportYear = r.latest_report_year || '-';
+            
+            // Action Button
+            let actionBtn = '';
+            if (r.status !== 'error') {
+                actionBtn = `<a href="/?ticker=${r.ticker}" class="ticker-link" target="_blank">Lihat Data →</a>`;
+            }
+
+            tr.innerHTML = `
+                <td>${i + 1}</td>
+                <td><a href="/?ticker=${r.ticker}" class="ticker-link" target="_blank">${r.ticker}</a></td>
+                <td>${r.company_name}</td>
+                <td>${r.sector}</td>
+                <td>${priceDisplay}</td>
+                <td>${mcapDisplay}</td>
+                <td>${reportYear}</td>
+                <td>${statusBadge}</td>
+                <td>${actionBtn}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function formatMarketCap(value, currency) {
+        const prefix = currency === 'IDR' ? 'Rp ' : (currency === 'USD' ? '$ ' : currency + ' ');
+        if (value >= 1e12) return prefix + (value / 1e12).toFixed(1) + ' T';
+        if (value >= 1e9) return prefix + (value / 1e9).toFixed(1) + ' B';
+        if (value >= 1e6) return prefix + (value / 1e6).toFixed(1) + ' M';
+        return prefix + value.toLocaleString();
+    }
+
+    function formatPrice(value, currency) {
+        const prefix = currency === 'IDR' ? 'Rp ' : (currency === 'USD' ? '$ ' : currency + ' ');
+        if (value === null || value === undefined) return '-';
+        return prefix + value.toLocaleString();
+    }
+
+    function sortResults(key) {
+        // Cycle: Neutral(0) -> Asc(1) -> Desc(2) -> Neutral(0)
+        
+        if (currentSort.key !== key) {
+            // New key, start at Asc(1)
+            currentSort.key = key;
+            currentSort.state = 1; 
+        } else {
+            // Check current state
+            if (currentSort.state === 1) {
+                currentSort.state = 2; // Asc -> Desc
+            } else if (currentSort.state === 2) {
+                currentSort.state = 0; // Desc -> Neutral
+                currentSort.key = null; // Clear key
+            } else {
+                currentSort.state = 1; // Neutral -> Asc (unlikely path if key matched, but safety)
+            }
+        }
+
+        // Apply Sort
+        if (currentSort.state === 0) {
+            // Neutral: Revert to original order
+            allResults = [...originalResults];
+        } else {
+            // Asc(1) or Desc(2)
+            const asc = currentSort.state === 1;
+            allResults.sort((a, b) => {
+                let valA, valB;
+
+                if (key === 'status') {
+                    // Custom rank for status
+                    const order = { 'error': 0, 'success': 1 }; // error first? usually we want success top
+                    // Let's say: Has Report (2) > No Report (1) > Error (0)
+                    const rank = (r) => { 
+                        if (r.status === 'error') return 0;
+                        return r.has_current_year_report ? 2 : 1; 
+                    };
+                    valA = rank(a);
+                    valB = rank(b);
+                } else {
+                    // Numeric sort for price/mcap
+                    valA = a[key] || 0;
+                    valB = b[key] || 0;
+                }
+                
+                return asc ? valA - valB : valB - valA;
+            });
+        }
+
+        updateSortIcons(key, currentSort.state);
+        renderTable(allResults);
+    }
+
+    function updateSortIcons(activeKey, state) {
+        // Reset all keys first
+        document.querySelectorAll('.results-table thead th.sortable').forEach(th => {
+            th.classList.remove('sort-active');
+            th.querySelector('.sort-arrow').textContent = '▲▼';
+            th.style.color = ''; // Reset color
+        });
+
+        if (state === 0 || !activeKey) return; // Neutral state, no active icon
+
+        // Find sort arrow for active key
+        let thId;
+        if (activeKey === 'market_cap') thId = 'thMarketCap';
+        else if (activeKey === 'status') thId = 'thStatus';
+        else if (activeKey === 'price') thId = 'thPrice';
+
+        if (thId) {
+            const th = document.getElementById(thId);
+            if (th) {
+                th.classList.add('sort-active');
+                const arrow = state === 1 ? '▲' : '▼'; // 1=Asc, 2=Desc
+                th.querySelector('.sort-arrow').textContent = arrow;
+            }
+        }
+    }
+
+    function resetSortIcons() {
+        document.querySelectorAll('.results-table thead th.sortable').forEach(th => {
+            th.classList.remove('sort-active');
+            th.querySelector('.sort-arrow').textContent = '▲▼';
+        });
+    }
+
+    function filterResults(type) {
+        currentFilter = type;
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.classList.toggle('active', false);
+            if (
+                (type === 'all' && tab.innerText === 'Semua') ||
+                (type === 'yes' && tab.innerText.includes('Sudah')) ||
+                (type === 'no' && tab.innerText.includes('Belum'))
+            ) {
+                tab.classList.add('active');
+            }
+        });
+        renderTable(allResults);
+    }
+
+    function showProgress() {
+        document.getElementById('progressSection').classList.add('active');
+        document.getElementById('progressBar').style.width = '100%';
+    }
+
+    function hideProgress() {
+        document.getElementById('progressSection').classList.remove('active');
+        document.getElementById('progressBar').style.width = '0%';
+    }
+
+    function showError(msg) {
+        const box = document.getElementById('errorBox');
+        box.textContent = msg;
+        box.classList.add('active');
+    }
+
+    function hideError() {
+        document.getElementById('errorBox').classList.remove('active');
+    }
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Analysis Screening — RSI & MACD Scanner</title>
+    <meta name="description" content="Screening saham berdasarkan analisis teknikal RSI(14) dan MACD(12,26,9) crossover dengan filter kapitalisasi pasar.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.06);
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-blue: #6366f1;
+            --accent-cyan: #22d3ee;
+            --accent-emerald: #10b981;
+            --accent-rose: #f43f5e;
+            --accent-amber: #f59e0b;
+            --accent-purple: #a855f7;
+            --gradient-primary: linear-gradient(135deg, #6366f1, #8b5cf6);
+            --gradient-buy: linear-gradient(135deg, #10b981, #34d399);
+            --gradient-sell: linear-gradient(135deg, #f43f5e, #fb7185);
+            --gradient-strong-buy: linear-gradient(135deg, #059669, #10b981);
+            --gradient-strong-sell: linear-gradient(135deg, #dc2626, #f43f5e);
+            --radius: 16px;
+            --radius-sm: 12px;
+            --shadow-glow: 0 4px 20px rgba(99, 102, 241, 0.15);
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(34, 211, 238, 0.03) 0%, transparent 50%);
+            z-index: -1;
+            animation: bgShift 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgShift {
+            0% { transform: translateX(0) translateY(0); }
+            100% { transform: translateX(-20px) translateY(-15px); }
+        }
+
+        .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+        /* Nav */
+        .nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .nav__brand {
+            font-size: 18px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+        }
+
+        .nav__links { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .nav__link {
+            padding: 8px 20px;
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .nav__link--default {
+            color: var(--text-secondary);
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+        }
+
+        .nav__link--default:hover {
+            color: var(--text-primary);
+            background: var(--bg-card-hover);
+        }
+
+        .nav__link--active {
+            background: var(--gradient-primary);
+            color: white;
+            border: 1px solid transparent;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 40px 0 20px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #f1f5f9, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 15px;
+            max-width: 650px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+
+        /* Filters Panel */
+        .filters-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 18px;
+            background: var(--gradient-primary);
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        /* List Grid */
+        .list-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .list-card {
+            position: relative;
+            padding: 14px 16px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .list-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .list-card.selected {
+            border-color: var(--accent-blue);
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        .list-card.selected::after {
+            content: '✓';
+            position: absolute;
+            top: 8px; right: 10px;
+            width: 22px; height: 22px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; color: white;
+        }
+
+        .list-card__name {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            padding-right: 28px;
+        }
+
+        .list-card__desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .list-card__count {
+            display: inline-block;
+            margin-top: 6px;
+            background: rgba(34, 211, 238, 0.1);
+            padding: 2px 8px;
+            border-radius: 100px;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        /* Market Cap Filter */
+        .mcap-section { margin-top: 20px; }
+
+        .mcap-presets {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .mcap-preset {
+            padding: 8px 18px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+        }
+
+        .mcap-preset:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        .mcap-preset.active {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: transparent;
+        }
+
+        /* Custom Tickers */
+        .custom-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: 'Inter', monospace;
+            font-size: 13px;
+            outline: none;
+            transition: var(--transition);
+            resize: vertical;
+            min-height: 50px;
+        }
+
+        .custom-input::placeholder { color: var(--text-muted); }
+        .custom-input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        .custom-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Scan Button */
+        .scan-bar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            margin: 24px 0 10px;
+        }
+
+        .scan-btn {
+            padding: 14px 44px;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scan-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.35);
+        }
+
+        .scan-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Progress */
+        .progress-section { display: none; text-align: center; padding: 40px 0; }
+        .progress-section.active { display: block; }
+
+        .progress-bar-wrap {
+            max-width: 500px;
+            margin: 0 auto 16px;
+            background: var(--glass);
+            border-radius: 100px;
+            height: 8px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--gradient-primary);
+            border-radius: 100px;
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: progressPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes progressPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .progress-text { color: var(--text-secondary); font-size: 14px; }
+
+        /* Error */
+        .error-box {
+            display: none;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 16px 20px;
+            background: rgba(244, 63, 94, 0.08);
+            border: 1px solid rgba(244, 63, 94, 0.2);
+            border-radius: var(--radius-sm);
+            color: var(--accent-rose);
+            font-size: 14px;
+            text-align: center;
+        }
+        .error-box.active { display: block; }
+
+        /* Results */
+        .results { display: none; padding-bottom: 60px; }
+        .results.active { display: block; animation: fadeIn 0.5s ease; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            padding: 18px;
+            text-align: center;
+        }
+
+        .stat-card__value {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 2px;
+        }
+
+        .stat-card__label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card--blue .stat-card__value { color: var(--accent-blue); }
+        .stat-card--emerald .stat-card__value { color: var(--accent-emerald); }
+        .stat-card--cyan .stat-card__value { color: var(--accent-cyan); }
+        .stat-card--rose .stat-card__value { color: var(--accent-rose); }
+        .stat-card--amber .stat-card__value { color: var(--accent-amber); }
+        .stat-card--purple .stat-card__value { color: var(--accent-purple); }
+
+        /* Results Table */
+        .results-table-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .results-table-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .results-table-header h3 { font-size: 15px; font-weight: 600; }
+
+        .filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        .filter-tab {
+            padding: 6px 14px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+        }
+
+        .filter-tab:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        .filter-tab.active {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: transparent;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .results-table thead th {
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.02);
+            white-space: nowrap;
+        }
+
+        .results-table thead th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: var(--transition);
+        }
+
+        .results-table thead th.sortable:hover { color: var(--accent-cyan); }
+
+        .results-table thead th .sort-arrow {
+            display: inline-block;
+            margin-left: 3px;
+            font-size: 9px;
+            opacity: 0.4;
+            transition: var(--transition);
+        }
+
+        .results-table thead th.sort-active .sort-arrow {
+            opacity: 1;
+            color: var(--accent-cyan);
+        }
+
+        .results-table tbody td {
+            padding: 12px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+        }
+
+        .results-table tbody tr { transition: var(--transition); }
+        .results-table tbody tr:hover { background: var(--bg-card-hover); }
+
+        .ticker-link {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-weight: 700;
+            transition: var(--transition);
+        }
+        .ticker-link:hover { color: var(--accent-blue); text-decoration: underline; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .badge--strong-buy { background: rgba(5, 150, 105, 0.15); color: #34d399; }
+        .badge--buy { background: rgba(16, 185, 129, 0.12); color: var(--accent-emerald); }
+        .badge--neutral { background: rgba(100, 116, 139, 0.12); color: var(--text-secondary); }
+        .badge--sell { background: rgba(244, 63, 94, 0.12); color: var(--accent-rose); }
+        .badge--strong-sell { background: rgba(220, 38, 38, 0.15); color: #fb7185; }
+        .badge--bullish { background: rgba(34, 211, 238, 0.1); color: var(--accent-cyan); }
+        .badge--bearish { background: rgba(168, 85, 247, 0.1); color: var(--accent-purple); }
+        .badge--buy-mild { background: rgba(16, 185, 129, 0.08); color: #6ee7b7; }
+        .badge--error { background: rgba(245, 158, 11, 0.1); color: var(--accent-amber); }
+
+        /* RSI Meter */
+        .rsi-meter {
+            width: 80px;
+            height: 6px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        .rsi-meter__fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .rsi-cell {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--glass-border);
+        }
+        .footer a { color: var(--accent-blue); text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 24px; }
+            .list-grid { grid-template-columns: 1fr 1fr; }
+            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+            .results-table { font-size: 11px; }
+            .results-table thead th, .results-table tbody td { padding: 8px 10px; }
+            .rsi-meter { width: 50px; }
+        }
+
+        @media (max-width: 480px) {
+            .list-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Nav -->
+    <nav class="nav">
+        <a href="/" class="nav__brand">📊 Finance Scraper</a>
+        <div class="nav__links">
+            <a href="/" class="nav__link nav__link--default">Dashboard</a>
+            <a href="/screening" class="nav__link nav__link--default">Screening</a>
+            <a href="/technical-screening" class="nav__link nav__link--active">Teknikal</a>
+            <a href="/avg-price" class="nav__link nav__link--default">Rata-Rata Harga</a>
+            <a href="/ownership" class="nav__link nav__link--default">Ownership</a>
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="header">
+        <h1>📊 Technical Analysis Screening</h1>
+        <p>Scan saham berdasarkan indikator teknikal <strong>RSI(14)</strong> dan <strong>MACD(12,26,9)</strong> crossover.
+           Filter berdasarkan kapitalisasi pasar untuk menemukan sinyal buy/sell terbaik.</p>
+    </header>
+
+    <!-- Filters Panel -->
+    <section class="filters-panel">
+        <div class="section-title">Pilih Daftar Saham</div>
+        <div id="listGrid" class="list-grid"></div>
+
+        <!-- Market Cap Filter -->
+        <div class="mcap-section">
+            <div class="section-title">Filter Kapitalisasi Pasar</div>
+            <div class="mcap-presets" id="mcapPresets">
+                <span class="mcap-preset active" data-preset="all" onclick="selectMcapPreset('all')">Semua</span>
+                <span class="mcap-preset" data-preset="micro" onclick="selectMcapPreset('micro')">Micro (&lt;1T)</span>
+                <span class="mcap-preset" data-preset="small" onclick="selectMcapPreset('small')">Small (1T–10T)</span>
+                <span class="mcap-preset" data-preset="mid" onclick="selectMcapPreset('mid')">Mid (10T–50T)</span>
+                <span class="mcap-preset" data-preset="large" onclick="selectMcapPreset('large')">Large (50T–200T)</span>
+                <span class="mcap-preset" data-preset="mega" onclick="selectMcapPreset('mega')">Mega (&gt;200T)</span>
+            </div>
+        </div>
+
+        <!-- Custom Tickers -->
+        <div style="margin-top: 18px;">
+            <div class="section-title">Atau Input Ticker Manual</div>
+            <textarea id="customTickers" class="custom-input" placeholder="Masukkan ticker dipisah koma, cth: BBCA.JK, TLKM.JK, ASII.JK"></textarea>
+            <div class="custom-label">Pisahkan setiap ticker dengan koma. Akan mengabaikan pilihan daftar di atas jika diisi.</div>
+        </div>
+
+        <div class="scan-bar">
+            <button id="scanBtn" class="scan-btn" onclick="startScan()">🔍 Mulai Scanning Teknikal</button>
+        </div>
+    </section>
+
+    <!-- Progress -->
+    <div id="progressSection" class="progress-section">
+        <div class="progress-bar-wrap">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p class="progress-text" id="progressText">Menganalisis indikator teknikal...</p>
+    </div>
+
+    <!-- Error -->
+    <div id="errorBox" class="error-box"></div>
+
+    <!-- Results -->
+    <div id="results" class="results">
+        <div class="section-title" id="resultsTitle">Hasil Screening Teknikal</div>
+        <div id="statsGrid" class="stats-grid"></div>
+
+        <div class="results-table-wrap">
+            <div class="results-table-header">
+                <h3 id="tableTitle">📊 Hasil Analisis Teknikal</h3>
+                <div class="filter-tabs" id="filterTabs">
+                    <span class="filter-tab active" data-filter="all" onclick="filterResults('all')">Semua</span>
+                    <span class="filter-tab" data-filter="strong_buy" onclick="filterResults('strong_buy')">🟢 Strong Buy</span>
+                    <span class="filter-tab" data-filter="buy" onclick="filterResults('buy')">🟢 Buy</span>
+                    <span class="filter-tab" data-filter="neutral" onclick="filterResults('neutral')">⚪ Neutral</span>
+                    <span class="filter-tab" data-filter="sell" onclick="filterResults('sell')">🔴 Sell</span>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Ticker</th>
+                            <th>Perusahaan</th>
+                            <th class="sortable" onclick="sortResults('price')" id="thPrice">Harga <span class="sort-arrow">▲▼</span></th>
+                            <th class="sortable" onclick="sortResults('market_cap')" id="thMcap">Market Cap <span class="sort-arrow">▲▼</span></th>
+                            <th class="sortable" onclick="sortResults('rsi')" id="thRsi">RSI(14) <span class="sort-arrow">▲▼</span></th>
+                            <th>RSI Zone</th>
+                            <th>MACD Cross</th>
+                            <th class="sortable" onclick="sortResults('composite_score')" id="thSignal">Sinyal <span class="sort-arrow">▲▼</span></th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a> via yfinance library.</p>
+        <p style="margin-top: 6px;">Indikator: RSI(14) Wilder's Smoothing · MACD(12,26,9) EMA · Built with Flask + yfinance · © 2026</p>
+    </footer>
+</div>
+
+<script>
+    let selectedList = null;
+    let selectedMcapPreset = 'all';
+    let allResults = [];
+    let originalResults = [];
+    let currentFilter = 'all';
+    let currentSort = { key: null, state: 0 };
+
+    // Init
+    loadStockLists();
+
+    // ─── Stock Lists ─────────────────────────────────────────────
+    async function loadStockLists() {
+        try {
+            const r = await fetch('/api/stock-lists');
+            const data = await r.json();
+            if (data.success) renderListCards(data.lists);
+        } catch (e) {
+            console.error('Failed to load stock lists', e);
+        }
+    }
+
+    function renderListCards(lists) {
+        const grid = document.getElementById('listGrid');
+        const icons = {
+            'idx_lq45': '🏆', 'idx_finansial': '🏦', 'idx_mineral_energi': '⛏️',
+            'idx_mineral_non_energi': '🪨', 'idx_utilitas': '⚡', 'idx_industri_proses': '🏭',
+            'idx_layanan_teknologi': '💻', 'idx_komunikasi': '📡',
+            'idx_konsumen_tidak_tahan_lama': '🛒', 'idx_layanan_kesehatan': '🏥',
+            'idx_layanan_konsumen': '🛍️', 'idx_transportasi': '✈️',
+            'idx_perdagangan_ritel': '🏪', 'idx_produsen_pabrikan': '🔧',
+            'idx_layanan_industri': '🏗️', 'idx_layanan_distribusi': '🚚',
+            'idx_teknologi_kesehatan': '💊', 'idx_konsumen_tahan_lama': '🚗',
+            'idx_layanan_komersil': '📋', 'idx_lain_lain': '📦',
+            'idx_teknologi_elektronik': '🔌', 'sp500_top50': '🇺🇸',
+        };
+
+        const idxLists = Object.entries(lists).filter(([, v]) => v.market === 'IDX');
+        const otherLists = Object.entries(lists).filter(([, v]) => v.market !== 'IDX');
+
+        let html = '';
+        html += '<div style="grid-column:1/-1;margin-top:2px;"><div class="section-title" style="margin-bottom:6px;">🇮🇩 Bursa Efek Indonesia</div></div>';
+        html += idxLists.map(([key, list]) => `
+            <div class="list-card" data-key="${key}" onclick="selectList('${key}')">
+                <div class="list-card__name">${icons[key] || '📋'} ${list.name}</div>
+                <div class="list-card__desc">${list.description}</div>
+                <span class="list-card__count">${list.count} saham</span>
+            </div>
+        `).join('');
+
+        if (otherLists.length > 0) {
+            html += '<div style="grid-column:1/-1;margin-top:12px;"><div class="section-title" style="margin-bottom:6px;">🌍 International</div></div>';
+            html += otherLists.map(([key, list]) => `
+                <div class="list-card" data-key="${key}" onclick="selectList('${key}')">
+                    <div class="list-card__name">${icons[key] || '📋'} ${list.name}</div>
+                    <div class="list-card__desc">${list.description}</div>
+                    <span class="list-card__count">${list.count} saham</span>
+                </div>
+            `).join('');
+        }
+
+        grid.innerHTML = html;
+    }
+
+    function selectList(key) {
+        selectedList = (selectedList === key) ? null : key;
+        document.querySelectorAll('.list-card').forEach(card => {
+            card.classList.toggle('selected', card.dataset.key === selectedList);
+        });
+        if (selectedList) document.getElementById('customTickers').value = '';
+    }
+
+    function selectMcapPreset(preset) {
+        selectedMcapPreset = preset;
+        document.querySelectorAll('.mcap-preset').forEach(el => {
+            el.classList.toggle('active', el.dataset.preset === preset);
+        });
+    }
+
+    // ─── Scan ────────────────────────────────────────────────────
+    async function startScan() {
+        const customText = document.getElementById('customTickers').value.trim();
+
+        let body = { market_cap_preset: selectedMcapPreset };
+
+        if (customText) {
+            const tickers = customText.split(',').map(t => t.trim()).filter(t => t);
+            if (tickers.length === 0) { showError('Masukkan minimal satu ticker.'); return; }
+            body.list = 'custom';
+            body.tickers = tickers;
+        } else if (selectedList) {
+            body.list = selectedList;
+        } else {
+            showError('Pilih daftar saham atau masukkan ticker manual.');
+            return;
+        }
+
+        const btn = document.getElementById('scanBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Menganalisis...';
+        hideError();
+        document.getElementById('results').classList.remove('active');
+        showProgress();
+
+        try {
+            const r = await fetch('/api/technical-screen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await r.json();
+
+            if (!data.success) {
+                showError(data.error || 'Gagal melakukan screening.');
+                return;
+            }
+
+            allResults = data.results;
+            originalResults = [...data.results];
+            renderResults(data);
+        } catch (e) {
+            showError('Gagal terhubung ke server.');
+            console.error(e);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔍 Mulai Screening Teknikal';
+            hideProgress();
+        }
+    }
+
+    // ─── Render Results ──────────────────────────────────────────
+    function renderResults(data) {
+        const sc = data.signal_counts;
+
+        document.getElementById('statsGrid').innerHTML = `
+            <div class="stat-card stat-card--blue">
+                <div class="stat-card__value">${data.total_scanned}</div>
+                <div class="stat-card__label">Total Dipindai</div>
+            </div>
+            <div class="stat-card stat-card--emerald">
+                <div class="stat-card__value">${sc.strong_buy}</div>
+                <div class="stat-card__label">Strong Buy</div>
+            </div>
+            <div class="stat-card stat-card--cyan">
+                <div class="stat-card__value">${sc.buy}</div>
+                <div class="stat-card__label">Buy</div>
+            </div>
+            <div class="stat-card stat-card--purple">
+                <div class="stat-card__value">${sc.neutral}</div>
+                <div class="stat-card__label">Neutral</div>
+            </div>
+            <div class="stat-card stat-card--rose">
+                <div class="stat-card__value">${sc.sell + sc.strong_sell}</div>
+                <div class="stat-card__label">Sell</div>
+            </div>
+            <div class="stat-card stat-card--amber">
+                <div class="stat-card__value">${data.error_count}</div>
+                <div class="stat-card__label">Error</div>
+            </div>
+        `;
+
+        document.getElementById('resultsTitle').innerHTML = `Hasil Screening — ${data.list_name}`;
+        document.getElementById('tableTitle').textContent = `📊 ${data.list_name} — Analisis Teknikal`;
+
+        currentFilter = 'all';
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.filter === 'all');
+        });
+
+        currentSort = { key: null, state: 0 };
+        resetSortIcons();
+        renderTable(allResults);
+        document.getElementById('results').classList.add('active');
+    }
+
+    function renderTable(results) {
+        const tbody = document.getElementById('resultsBody');
+        tbody.innerHTML = '';
+
+        const filtered = results.filter(r => {
+            if (currentFilter === 'all') return true;
+            if (currentFilter === 'strong_buy') return r.composite_color === 'strong_buy';
+            if (currentFilter === 'buy') return r.composite_color === 'buy' || r.composite_color === 'strong_buy';
+            if (currentFilter === 'neutral') return r.composite_color === 'neutral';
+            if (currentFilter === 'sell') return r.composite_color === 'sell' || r.composite_color === 'strong_sell';
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-muted);">Tidak ada saham yang cocok dengan filter ini.</td></tr>';
+            return;
+        }
+
+        filtered.forEach((r, i) => {
+            const tr = document.createElement('tr');
+
+            if (r.status === 'error') {
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td><span class="ticker-link">${r.ticker}</span></td>
+                    <td>${r.company_name}</td>
+                    <td colspan="6"><span class="badge badge--error">Error: ${r.error || 'Unknown'}</span></td>
+                    <td>—</td>
+                `;
+                tbody.appendChild(tr);
+                return;
+            }
+
+            const priceDisplay = r.price ? formatPrice(r.price, r.currency) : '—';
+            const mcapDisplay = r.market_cap ? formatMarketCap(r.market_cap, r.currency) : '—';
+
+            // RSI cell with mini meter
+            const rsiDisplay = r.rsi != null ? r.rsi.toFixed(1) : '—';
+            const rsiPct = r.rsi != null ? Math.min(100, Math.max(0, r.rsi)) : 0;
+            const rsiColor = getRsiColor(r.rsi);
+
+            // MACD cross badge
+            const macdBadge = getMacdBadge(r);
+
+            // RSI badge
+            const rsiBadge = getRsiBadge(r);
+
+            // Composite badge
+            const compositeBadge = getCompositeBadge(r);
+
+            tr.innerHTML = `
+                <td style="font-weight:700;color:var(--text-primary);">${i + 1}</td>
+                <td><a href="/?ticker=${r.ticker}" class="ticker-link" target="_blank">${r.ticker}</a></td>
+                <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.company_name}</td>
+                <td>${priceDisplay}</td>
+                <td>${mcapDisplay}</td>
+                <td>
+                    <div class="rsi-cell">
+                        <div class="rsi-meter"><div class="rsi-meter__fill" style="width:${rsiPct}%;background:${rsiColor};"></div></div>
+                        <span style="font-weight:600;color:${rsiColor};">${rsiDisplay}</span>
+                    </div>
+                </td>
+                <td>${rsiBadge}</td>
+                <td>${macdBadge}</td>
+                <td>${compositeBadge}</td>
+                <td><a href="/?ticker=${r.ticker}" class="ticker-link" target="_blank">Lihat →</a></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────
+    function getRsiColor(rsi) {
+        if (rsi == null) return '#64748b';
+        if (rsi < 30) return '#10b981';
+        if (rsi < 50) return '#22d3ee';
+        if (rsi <= 60) return '#94a3b8';
+        if (rsi < 70) return '#f59e0b';
+        return '#f43f5e';
+    }
+
+    function getRsiBadge(r) {
+        const map = {
+            'oversold': 'badge--buy', 'emerging_bullish': 'badge--buy-mild',
+            'neutral_low': 'badge--neutral', 'neutral': 'badge--neutral',
+            'bullish': 'badge--bullish', 'overbought': 'badge--sell',
+            'unknown': 'badge--neutral',
+        };
+        return `<span class="badge ${map[r.rsi_zone] || 'badge--neutral'}">${r.rsi_label || 'N/A'}</span>`;
+    }
+
+    function getMacdBadge(r) {
+        const map = {
+            'bullish_cross': 'badge--buy', 'bearish_cross': 'badge--sell',
+            'above_signal': 'badge--bullish', 'below_signal': 'badge--bearish',
+        };
+        const icon = r.macd_cross_type?.includes('bullish') ? '🟢' : (r.macd_cross_type?.includes('bearish') ? '🔴' : '⚪');
+        let label = r.macd_cross_label || 'N/A';
+        if (r.macd_cross_bars_ago != null && r.macd_cross_bars_ago >= 0) {
+            label += ` (${r.macd_cross_bars_ago}d)`;
+        }
+        return `<span class="badge ${map[r.macd_cross_type] || 'badge--neutral'}">${icon} ${label}</span>`;
+    }
+
+    function getCompositeBadge(r) {
+        const map = {
+            'strong_buy': 'badge--strong-buy', 'buy': 'badge--buy',
+            'neutral': 'badge--neutral', 'sell': 'badge--sell',
+            'strong_sell': 'badge--strong-sell',
+        };
+        return `<span class="badge ${map[r.composite_color] || 'badge--neutral'}">${r.composite_signal || 'N/A'}</span>`;
+    }
+
+    function formatMarketCap(value, currency) {
+        const prefix = currency === 'IDR' ? 'Rp ' : (currency === 'USD' ? '$ ' : currency + ' ');
+        if (value >= 1e12) return prefix + (value / 1e12).toFixed(1) + ' T';
+        if (value >= 1e9) return prefix + (value / 1e9).toFixed(1) + ' B';
+        if (value >= 1e6) return prefix + (value / 1e6).toFixed(1) + ' M';
+        return prefix + value.toLocaleString();
+    }
+
+    function formatPrice(value, currency) {
+        const prefix = currency === 'IDR' ? 'Rp ' : (currency === 'USD' ? '$ ' : currency + ' ');
+        if (value === null || value === undefined) return '—';
+        return prefix + value.toLocaleString();
+    }
+
+    // ─── Sort ────────────────────────────────────────────────────
+    function sortResults(key) {
+        if (currentSort.key !== key) {
+            currentSort.key = key;
+            currentSort.state = 1;
+        } else {
+            currentSort.state = currentSort.state === 1 ? 2 : (currentSort.state === 2 ? 0 : 1);
+            if (currentSort.state === 0) currentSort.key = null;
+        }
+
+        if (currentSort.state === 0) {
+            allResults = [...originalResults];
+        } else {
+            const asc = currentSort.state === 1;
+            allResults.sort((a, b) => {
+                const valA = a[key] || 0;
+                const valB = b[key] || 0;
+                return asc ? valA - valB : valB - valA;
+            });
+        }
+
+        updateSortIcons(key, currentSort.state);
+        renderTable(allResults);
+    }
+
+    function updateSortIcons(activeKey, state) {
+        document.querySelectorAll('.results-table thead th.sortable').forEach(th => {
+            th.classList.remove('sort-active');
+            th.querySelector('.sort-arrow').textContent = '▲▼';
+        });
+
+        if (state === 0 || !activeKey) return;
+
+        const idMap = { 'price': 'thPrice', 'market_cap': 'thMcap', 'rsi': 'thRsi', 'composite_score': 'thSignal' };
+        const th = document.getElementById(idMap[activeKey]);
+        if (th) {
+            th.classList.add('sort-active');
+            th.querySelector('.sort-arrow').textContent = state === 1 ? '▲' : '▼';
+        }
+    }
+
+    function resetSortIcons() {
+        document.querySelectorAll('.results-table thead th.sortable').forEach(th => {
+            th.classList.remove('sort-active');
+            th.querySelector('.sort-arrow').textContent = '▲▼';
+        });
+    }
+
+    // ─── Filter ──────────────────────────────────────────────────
+    function filterResults(type) {
+        currentFilter = type;
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.filter === type);
+        });
+        renderTable(allResults);
+    }
+
+    // ─── Progress / Error ────────────────────────────────────────
+    function showProgress() {
+        document.getElementById('progressSection').classList.add('active');
+        document.getElementById('progressBar').style.width = '100%';
+    }
+    function hideProgress() {
+        document.getElementById('progressSection').classList.remove('active');
+        document.getElementById('progressBar').style.width = '0%';
+    }
+    function showError(msg) {
+        const box = document.getElementById('errorBox');
+        box.textContent = msg;
+        box.classList.add('active');
+    }
+    function hideError() {
+        document.getElementById('errorBox').classList.remove('active');
+    }
+</script>
+</body>
+</html>

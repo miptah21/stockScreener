@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harga Rata-Rata Saham — FCA Calculator</title>
+    <meta name="description" content="Hitung harga rata-rata saham selama 6 bulan terakhir. Analisis premium/discount terhadap harga rata-rata.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.06);
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f0f0f0;
+            --text-secondary: #8b8b9e;
+            --text-muted: #5a5a6e;
+            --accent-blue: #6366f1;
+            --accent-purple: #a855f7;
+            --accent-cyan: #22d3ee;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-orange: #f97316;
+            --accent-pink: #ec4899;
+            --gradient-primary: linear-gradient(135deg, #6366f1, #a855f7);
+            --gradient-hero: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.04) 0%, transparent 50%);
+            z-index: 0;
+            animation: bgPulse 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgPulse {
+            0% { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.05) rotate(2deg); }
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        .header {
+            padding: 40px 0 20px;
+            text-align: center;
+        }
+
+        .header__badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 20px;
+            animation: fadeInDown 0.6s ease;
+        }
+
+        .header__badge::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: var(--accent-emerald);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .header h1 {
+            font-size: 42px;
+            font-weight: 800;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 12px;
+            animation: fadeInDown 0.6s ease 0.1s both;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+            animation: fadeInDown 0.6s ease 0.2s both;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-in {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideUp 0.5s ease forwards;
+        }
+
+        /* Search */
+        .search-section {
+            padding: 30px 0;
+            animation: fadeInDown 0.6s ease 0.3s both;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 12px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 16px 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            font-weight: 500;
+            outline: none;
+            transition: var(--transition);
+            backdrop-filter: blur(20px);
+        }
+
+        .search-input::placeholder { color: var(--text-muted); }
+
+        .search-input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15), var(--shadow-glow);
+        }
+
+        .search-btn {
+            padding: 16px 32px;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius);
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .search-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(99, 102, 241, 0.35);
+        }
+
+        .search-btn:hover::after { opacity: 1; }
+        .search-btn:active { transform: translateY(0); }
+        .search-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+        .search-hints {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .hint-chip {
+            padding: 5px 14px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 100px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .hint-chip:hover {
+            background: var(--bg-card-hover);
+            color: var(--accent-cyan);
+            border-color: rgba(34, 211, 238, 0.3);
+        }
+
+        /* Loading */
+        .loading { display: none; text-align: center; padding: 60px 0; }
+        .loading.active { display: block; }
+
+        .spinner {
+            width: 48px; height: 48px;
+            border: 3px solid var(--glass-border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading p { color: var(--text-secondary); font-size: 14px; }
+
+        /* Error */
+        .error-box {
+            display: none;
+            max-width: 600px;
+            margin: 24px auto;
+            padding: 20px 24px;
+            background: rgba(244, 63, 94, 0.08);
+            border: 1px solid rgba(244, 63, 94, 0.2);
+            border-radius: var(--radius-sm);
+            color: var(--accent-rose);
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .error-box.active {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        /* Results */
+        .results { display: none; padding-bottom: 80px; }
+        .results.active { display: block; animation: fadeIn 0.5s ease; }
+
+        /* Company Header Card */
+        .company-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 32px;
+            margin-bottom: 32px;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .company-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--gradient-hero);
+        }
+
+        .company-card__header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .company-card__name {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .company-card__ticker {
+            display: inline-block;
+            padding: 4px 12px;
+            background: var(--gradient-primary);
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+
+        .company-card__meta {
+            display: flex;
+            gap: 24px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .company-card__meta strong { color: var(--text-primary); font-weight: 600; }
+
+        .company-card__price-block { text-align: right; }
+
+        .company-card__price-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .company-card__price {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--accent-emerald);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 24px;
+            transition: var(--transition);
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            background: var(--bg-card-hover);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .stat-card__icon {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card__label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-card__value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .stat-card__sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        /* Premium/Discount Card */
+        .verdict-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 32px;
+            margin-bottom: 32px;
+            backdrop-filter: blur(20px);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .verdict-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+
+        .verdict-card.discount::before { background: linear-gradient(90deg, #10b981, #34d399); }
+        .verdict-card.premium::before { background: linear-gradient(90deg, #f43f5e, #fb7185); }
+
+        .verdict-card__label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .verdict-card__value {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .verdict-card__verdict {
+            font-size: 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .verdict-card__desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            line-height: 1.6;
+        }
+
+        /* Chart Section */
+        .chart-section {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            margin-bottom: 32px;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            position: relative;
+        }
+
+        .chart-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+            z-index: 1;
+        }
+
+        .chart-header {
+            padding: 20px 24px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .chart-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .chart-legend span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chart-legend__dot {
+            width: 10px; height: 3px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+
+        .chart-body {
+            padding: 16px 24px 24px;
+            height: 420px;
+            position: relative;
+        }
+
+        .chart-body canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .footer a { color: var(--accent-blue); text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 28px; }
+            .search-box { flex-direction: column; }
+            .company-card__header { flex-direction: column; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .verdict-card__value { font-size: 36px; }
+            .company-card__price { font-size: 24px; }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Nav -->
+        <nav class="nav" style="display:flex;align-items:center;justify-content:space-between;padding:20px 0;border-bottom:1px solid var(--glass-border);margin-bottom:10px;">
+            <a href="/" style="font-size:16px;font-weight:700;background:var(--gradient-hero);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-decoration:none;">📊 Finance Scraper</a>
+            <div style="display:flex;gap:8px;">
+                <a href="/" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">Dashboard</a>
+                <a href="/screening" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">Screening</a>
+                <a href="/technical-screening" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">Teknikal</a>
+                <a href="/avg-price" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:white;background:var(--gradient-primary);border:1px solid transparent;">Rata-Rata Harga</a>
+                <a href="/ownership" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">Ownership</a>
+            </div>
+        </nav>
+
+        <!-- Header -->
+        <header class="header">
+            <div class="header__badge">
+                <span>Stock Average Price Calculator</span>
+            </div>
+            <h1>Harga Rata-Rata Saham</h1>
+            <p>Hitung harga rata-rata saham selama 6 bulan terakhir. Bandingkan harga saat ini dengan rata-rata untuk mengetahui premium/discount.</p>
+        </header>
+
+        <!-- Search -->
+        <section class="search-section">
+            <div class="search-box">
+                <input
+                    type="text"
+                    id="tickerInput"
+                    class="search-input"
+                    placeholder="Masukkan ticker saham (cth: BBCA.JK, AAPL)..."
+                    autocomplete="off"
+                >
+                <button id="calcBtn" class="search-btn" onclick="handleCalc()">
+                    📊 Hitung Rata-Rata
+                </button>
+            </div>
+            <div class="search-hints">
+                <span class="hint-chip" onclick="quickSearch('BBCA.JK')">BBCA.JK</span>
+                <span class="hint-chip" onclick="quickSearch('BBRI.JK')">BBRI.JK</span>
+                <span class="hint-chip" onclick="quickSearch('TLKM.JK')">TLKM.JK</span>
+                <span class="hint-chip" onclick="quickSearch('ASII.JK')">ASII.JK</span>
+                <span class="hint-chip" onclick="quickSearch('AAPL')">AAPL</span>
+                <span class="hint-chip" onclick="quickSearch('MSFT')">MSFT</span>
+                <span class="hint-chip" onclick="quickSearch('GOOGL')">GOOGL</span>
+                <span class="hint-chip" onclick="quickSearch('TSLA')">TSLA</span>
+            </div>
+        </section>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Mengambil data harga 6 bulan terakhir...</p>
+        </div>
+
+        <!-- Error -->
+        <div id="errorBox" class="error-box"></div>
+
+        <!-- Results -->
+        <div id="results" class="results">
+            <!-- Company Card -->
+            <div id="companyCard" class="company-card animate-in"></div>
+
+            <!-- Premium/Discount Verdict -->
+            <div id="verdictCard" class="verdict-card animate-in" style="animation-delay:0.1s"></div>
+
+            <!-- Stats Grid -->
+            <div id="statsGrid" class="stats-grid"></div>
+
+            <!-- Chart -->
+            <div id="chartSection" class="chart-section animate-in" style="animation-delay:0.3s">
+                <div class="chart-header">
+                    <h3>📈 Grafik Harga 6 Bulan Terakhir</h3>
+                    <div class="chart-legend">
+                        <span><span class="chart-legend__dot" style="background:var(--accent-cyan);"></span> Harga Harian</span>
+                        <span><span class="chart-legend__dot" style="background:var(--accent-amber);"></span> Harga Rata-Rata</span>
+                    </div>
+                </div>
+                <div id="chartBody" class="chart-body">
+                    <canvas id="avgPriceCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a>. Data may be delayed.</p>
+            <p style="margin-top: 6px;">Built with Flask + yfinance · © 2026</p>
+        </footer>
+    </div>
+
+    <script>
+        let avgChart = null;
+
+        document.getElementById('tickerInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleCalc();
+        });
+
+        function quickSearch(ticker) {
+            document.getElementById('tickerInput').value = ticker;
+            handleCalc();
+        }
+
+        async function handleCalc() {
+            const ticker = document.getElementById('tickerInput').value.trim();
+            if (!ticker) {
+                showError('Masukkan ticker saham terlebih dahulu.');
+                return;
+            }
+
+            const btn = document.getElementById('calcBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Mengambil data...';
+            showLoading(true);
+            hideError();
+            hideResults();
+
+            try {
+                const res = await fetch(`/api/avg-price?ticker=${encodeURIComponent(ticker)}`);
+                const data = await res.json();
+
+                if (!data.success) {
+                    showError(data.error || 'Gagal mengambil data. Pastikan ticker benar.');
+                    return;
+                }
+
+                renderAll(data);
+            } catch (err) {
+                showError('Gagal terhubung ke server. Pastikan server berjalan.');
+                console.error(err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📊 Hitung Rata-Rata';
+                showLoading(false);
+            }
+        }
+
+        function renderAll(d) {
+            renderCompanyCard(d);
+            renderVerdictCard(d);
+            renderStatsGrid(d);
+            renderChart(d);
+            showResults();
+        }
+
+        function renderCompanyCard(d) {
+            document.getElementById('companyCard').innerHTML = `
+                <div class="company-card__header">
+                    <div>
+                        <div class="company-card__name">
+                            ${d.company_name}
+                            <span class="company-card__ticker">${d.ticker}</span>
+                        </div>
+                        <div class="company-card__meta">
+                            <span>📅 Periode: <strong>${formatDate(d.date_start)} — ${formatDate(d.date_end)}</strong></span>
+                            <span>📊 Total Hari Perdagangan: <strong>${d.total_days}</strong></span>
+                            <span>💱 Mata Uang: <strong>${d.currency}</strong></span>
+                        </div>
+                    </div>
+                    <div class="company-card__price-block">
+                        <div class="company-card__price-label">Harga Saat Ini</div>
+                        <div class="company-card__price">${d.currency} ${d.current_price.toLocaleString('id-ID')}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderVerdictCard(d) {
+            const pct = d.premium_discount_pct;
+            const isDiscount = pct <= 0;
+            const color = isDiscount ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+            const verdictText = isDiscount ? 'DISCOUNT' : 'PREMIUM';
+            const verdictDesc = isDiscount
+                ? `Harga saat ini <strong>${Math.abs(pct)}%</strong> di bawah harga rata-rata 6 bulan. Saham ini mungkin berada di area menarik untuk akumulasi.`
+                : `Harga saat ini <strong>${Math.abs(pct)}%</strong> di atas harga rata-rata 6 bulan. Saham ini diperdagangkan di atas rata-rata historis.`;
+            const cls = isDiscount ? 'discount' : 'premium';
+
+            document.getElementById('verdictCard').className = `verdict-card animate-in ${cls}`;
+            document.getElementById('verdictCard').innerHTML = `
+                <div class="verdict-card__label">Posisi vs Harga Rata-Rata</div>
+                <div class="verdict-card__value" style="color:${color}">${pct >= 0 ? '+' : ''}${pct}%</div>
+                <div class="verdict-card__verdict" style="color:${color}">${verdictText}</div>
+                <div class="verdict-card__desc">${verdictDesc}</div>
+            `;
+        }
+
+        function renderStatsGrid(d) {
+            const stats = [
+                { icon: '📊', label: 'Harga Rata-Rata (Mean)', value: d.avg_price, bg: 'rgba(99, 102, 241, 0.15)', color: 'var(--accent-blue)', sub: 'Rata-rata harga penutupan 6 bulan' },
+                { icon: '📈', label: 'Harga Median', value: d.median_price, bg: 'rgba(168, 85, 247, 0.15)', color: 'var(--accent-purple)', sub: 'Nilai tengah dari semua harga' },
+                { icon: '🔺', label: 'Harga Tertinggi', value: d.high_price, bg: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)', sub: 'Harga penutupan tertinggi 6 bulan' },
+                { icon: '🔻', label: 'Harga Terendah', value: d.low_price, bg: 'rgba(244, 63, 94, 0.15)', color: 'var(--accent-rose)', sub: 'Harga penutupan terendah 6 bulan' },
+                { icon: '💰', label: 'Harga Saat Ini', value: d.current_price, bg: 'rgba(34, 211, 238, 0.15)', color: 'var(--accent-cyan)', sub: 'Harga terakhir' },
+                { icon: '📐', label: 'Rentang Harga', value: null, range: true, bg: 'rgba(245, 158, 11, 0.15)', color: 'var(--accent-amber)', sub: `Selisih: ${d.currency} ${(d.high_price - d.low_price).toLocaleString('id-ID')}` },
+            ];
+
+            const html = stats.map((s, i) => {
+                const displayVal = s.range
+                    ? `${d.currency} ${d.low_price.toLocaleString('id-ID')} — ${d.high_price.toLocaleString('id-ID')}`
+                    : `${d.currency} ${s.value.toLocaleString('id-ID')}`;
+
+                return `
+                    <div class="stat-card animate-in" style="animation-delay:${0.15 + i * 0.05}s">
+                        <div class="stat-card__icon" style="background:${s.bg};color:${s.color}">${s.icon}</div>
+                        <div class="stat-card__label">${s.label}</div>
+                        <div class="stat-card__value" style="color:${s.color}">${displayVal}</div>
+                        <div class="stat-card__sub">${s.sub}</div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('statsGrid').innerHTML = html;
+        }
+
+        function renderChart(d) {
+            if (avgChart) { avgChart.destroy(); avgChart = null; }
+
+            const canvas = document.getElementById('avgPriceCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Build gradient
+            const isUp = d.closes[d.closes.length - 1] >= d.closes[0];
+            const lineColor = isUp ? '#10b981' : '#f43f5e';
+            const fillTop = isUp ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)';
+            const fillBottom = isUp ? 'rgba(16, 185, 129, 0.0)' : 'rgba(244, 63, 94, 0.0)';
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.parentElement.clientHeight);
+            gradient.addColorStop(0, fillTop);
+            gradient.addColorStop(1, fillBottom);
+
+            // Thin labels
+            const labelInterval = Math.max(1, Math.floor(d.dates.length / 8));
+            const displayLabels = d.dates.map((dt, i) => {
+                if (i % labelInterval === 0 || i === d.dates.length - 1) {
+                    const date = new Date(dt);
+                    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
+                }
+                return '';
+            });
+
+            // Average line data
+            const avgLine = d.closes.map(() => d.avg_price);
+
+            avgChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: displayLabels,
+                    datasets: [
+                        {
+                            label: 'Harga',
+                            data: d.closes,
+                            borderColor: lineColor,
+                            backgroundColor: gradient,
+                            borderWidth: 2.5,
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHoverRadius: 6,
+                            pointHoverBackgroundColor: lineColor,
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2,
+                            order: 1,
+                        },
+                        {
+                            label: 'Rata-Rata',
+                            data: avgLine,
+                            borderColor: '#f59e0b',
+                            borderWidth: 2,
+                            borderDash: [8, 4],
+                            fill: false,
+                            tension: 0,
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            order: 0,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(18, 18, 26, 0.95)',
+                            titleColor: '#f0f0f0',
+                            bodyColor: '#e0e0e0',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            cornerRadius: 10,
+                            titleFont: { size: 12, weight: '500' },
+                            bodyFont: { size: 14, weight: '600' },
+                            displayColors: true,
+                            callbacks: {
+                                title: function(items) {
+                                    const idx = items[0].dataIndex;
+                                    const dt = new Date(d.dates[idx]);
+                                    return dt.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                                },
+                                label: function(item) {
+                                    return ` ${item.dataset.label}: ${item.raw.toLocaleString('id-ID')}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+                            ticks: { color: '#5a5a6e', font: { size: 11 }, maxRotation: 0 },
+                            border: { display: false },
+                        },
+                        y: {
+                            position: 'right',
+                            grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+                            ticks: {
+                                color: '#5a5a6e',
+                                font: { size: 11 },
+                                callback: v => v.toLocaleString('id-ID'),
+                            },
+                            border: { display: false },
+                        }
+                    }
+                }
+            });
+        }
+
+        // Utilities
+        function formatDate(dateStr) {
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('active', show);
+        }
+
+        function showError(msg) {
+            const box = document.getElementById('errorBox');
+            box.textContent = '⚠️ ' + msg;
+            box.classList.add('active');
+        }
+
+        function hideError() {
+            document.getElementById('errorBox').classList.remove('active');
+        }
+
+        function showResults() {
+            document.getElementById('results').classList.add('active');
+        }
+
+        function hideResults() {
+            document.getElementById('results').classList.remove('active');
+        }
+
+        // Auto-search from URL
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const ticker = params.get('ticker');
+            if (ticker) {
+                document.getElementById('tickerInput').value = ticker;
+                handleCalc();
+            }
+        })();
+    </script>
+</body>
+</html>
