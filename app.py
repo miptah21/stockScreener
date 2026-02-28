@@ -10,6 +10,7 @@ from scraper import get_financials
 from screener import get_stock_lists, screen_stocks
 from bandarmology import get_broker_summary, calculate_bandar_flow
 from technical_screener import run_technical_screen, MARKET_CAP_PRESETS
+from simple_screener import run_simple_screen, MARKET_CAP_PRESETS as SIMPLE_MCAP_PRESETS
 
 app = Flask(__name__)
 CORS(app)
@@ -494,6 +495,50 @@ def api_technical_screen():
     return jsonify(result)
 
 
+@app.route('/simple-screening')
+def simple_screening_page():
+    """Serve the Simple RSI & MACD Screening page."""
+    return render_template('simple_screening.html')
+
+
+@app.route('/api/simple-screen', methods=['POST'])
+def api_simple_screen():
+    """
+    Run simple RSI + MACD screening on a stock list.
+
+    POST JSON body:
+        list (str): Stock list key or 'custom'
+        tickers (list): Custom tickers (if list='custom')
+        market_cap_preset (str): Preset key like 'small', 'mid', 'large' (optional)
+    """
+    data = request.get_json() or {}
+    list_key = data.get('list', '').strip()
+    custom_tickers = data.get('tickers', [])
+    preset = data.get('market_cap_preset', 'all')
+
+    if not list_key:
+        return jsonify({'success': False, 'error': 'Parameter "list" is required.'}), 400
+
+    min_mc = data.get('min_market_cap')
+    max_mc = data.get('max_market_cap')
+
+    if preset and preset in SIMPLE_MCAP_PRESETS and preset != 'all':
+        p = SIMPLE_MCAP_PRESETS[preset]
+        min_mc = p['min']
+        max_mc = p['max']
+
+    result = run_simple_screen(
+        list_key=list_key,
+        custom_tickers=custom_tickers,
+        min_market_cap=min_mc,
+        max_market_cap=max_mc,
+    )
+
+    if not result.get('success'):
+        return jsonify(result), 400
+
+    return jsonify(result)
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
-
