@@ -303,14 +303,30 @@
         /* Responsive */
         @media (max-width: 768px) {
             .header h1 { font-size: 24px; }
-            .list-grid { grid-template-columns: 1fr 1fr; }
-            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+            .header p { font-size: 13px; }
+            .list-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+            .filters-panel { padding: 16px; margin: 16px 0; }
+            .results-table-header { padding: 12px 14px; flex-direction: column; align-items: flex-start; }
+            .filter-tabs { width: 100%; overflow-x: auto; padding-bottom: 4px; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+            .filter-tab { flex-shrink: 0; }
             .results-table { font-size: 10px; }
-            .results-table thead th, .results-table tbody td { padding: 6px 8px; }
+            .results-table thead th, .results-table tbody td { padding: 8px 10px; white-space: nowrap; }
+            .scan-btn { width: 100%; padding: 14px; }
         }
         @media (max-width: 480px) {
+            .nav { justify-content: center; }
             .list-grid { grid-template-columns: 1fr; }
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .mcap-presets { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+            .mcap-preset { flex-shrink: 0; }
+            .stat-card__value { font-size: 20px; }
+            .results-table thead th, .results-table tbody td { padding: 6px 8px; }
+        }
+        
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
     </style>
 </head>
@@ -394,7 +410,7 @@
                     <span class="filter-tab" data-filter="sell" onclick="filterResults('sell')">🔴 Sell (&lt;40)</span>
                 </div>
             </div>
-            <div style="overflow-x: auto;">
+            <div class="table-responsive">
                 <table class="results-table">
                     <thead>
                         <tr>
