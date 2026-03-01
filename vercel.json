@@ -11,13 +11,5 @@
       "src": "/(.*)",
       "dest": "api/index.py"
     }
-  ],
-  "excludeFiles": [
-    ".venv/**",
-    "__pycache__/**",
-    "scripts/**",
-    ".git/**",
-    "*.pyc",
-    ".env"
   ]
 }
