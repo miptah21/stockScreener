@@ -1,8 +1,14 @@
+# Environment
 .env
 __pycache__/
 *.pyc
 venv/
 .venv/
+
+# Secrets & debug outputs
 keys.txt
 dump_keys.txt
 *.log
+
+# Dev-only scripts and outputs
+scripts/

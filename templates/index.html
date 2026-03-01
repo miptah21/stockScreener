@@ -76,6 +76,26 @@
             z-index: 1;
         }
 
+        /* Nav */
+        .nav {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 0; border-bottom: 1px solid var(--glass-border);
+            flex-wrap: wrap; gap: 12px;
+        }
+        .nav__brand {
+            font-size: 18px; font-weight: 700;
+            background: var(--gradient-primary); -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent; background-clip: text; text-decoration: none;
+        }
+        .nav__links { display: flex; gap: 8px; flex-wrap: wrap; }
+        .nav__link {
+            padding: 8px 20px; border-radius: 100px; font-size: 13px; font-weight: 500;
+            text-decoration: none; transition: var(--transition);
+        }
+        .nav__link--default { color: var(--text-secondary); border: 1px solid transparent; }
+        .nav__link--default:hover { color: var(--text-primary); background: var(--glass); border-color: var(--glass-border); }
+        .nav__link--active { background: var(--gradient-primary); color: white; border: 1px solid transparent; }
+
         /* Header */
         .header {
             padding: 40px 0 20px;
@@ -1317,15 +1337,15 @@
 
     <div class="container">
         <!-- Nav -->
-        <nav class="nav" style="display:flex;align-items:center;justify-content:space-between;padding:20px 0;border-bottom:1px solid var(--glass-border);margin-bottom:10px;">
-            <a href="/" style="font-size:16px;font-weight:700;background:var(--gradient-hero);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-decoration:none;">📊 Finance Scraper</a>
-            <div style="display:flex;gap:8px;">
-                <a href="/" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:white;background:var(--gradient-primary);border:1px solid transparent;">Dashboard</a>
-                <a href="/screening" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">Screening</a>
-                <a href="/technical-screening" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">Teknikal</a>
-                <a href="/simple-screening" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">RSI & MACD</a>
-                <a href="/avg-price" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">Rata-Rata Harga</a>
-                <a href="/ownership" style="padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;text-decoration:none;color:var(--text-secondary);background:var(--glass);border:1px solid var(--glass-border);transition:var(--transition);">Ownership</a>
+        <nav class="nav">
+            <a href="/" class="nav__brand">📊 Finance Scraper</a>
+            <div class="nav__links">
+                <a href="/" class="nav__link nav__link--active">Dashboard</a>
+                <a href="/screening" class="nav__link nav__link--default">Screening</a>
+                <a href="/technical-screening" class="nav__link nav__link--default">Teknikal</a>
+                <a href="/simple-screening" class="nav__link nav__link--default">RSI & MACD</a>
+                <a href="/avg-price" class="nav__link nav__link--default">Rata-Rata Harga</a>
+                <a href="/ownership" class="nav__link nav__link--default">Ownership</a>
             </div>
         </nav>
 
@@ -1505,7 +1525,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a> & various alternative providers. Data may be delayed.</p>
+            <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a>. Data may be delayed.</p>
             <p style="margin-top: 6px;">Built with Flask + yfinance · © 2026</p>
         </footer>
     </div>
