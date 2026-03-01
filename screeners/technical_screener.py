@@ -699,11 +699,252 @@ MARKET_CAP_PRESETS = {
 }
 
 
+# ─── Batch Download & Analyze ─────────────────────────────────────────
+def _fetch_info_safe(ticker_symbol: str) -> dict:
+    """Fetch ticker.info safely, return minimal dict on failure."""
+    try:
+        info = yf.Ticker(ticker_symbol).info or {}
+        return {
+            'company_name': info.get('longName', info.get('shortName', ticker_symbol)),
+            'sector': info.get('sector', 'N/A'),
+            'market_cap': info.get('marketCap'),
+            'currency': info.get('currency', 'IDR'),
+            'price': info.get('currentPrice', info.get('regularMarketPrice')),
+        }
+    except Exception:
+        return {
+            'company_name': ticker_symbol,
+            'sector': 'N/A',
+            'market_cap': None,
+            'currency': 'IDR',
+            'price': None,
+        }
+
+
+def _analyze_from_dataframe(ticker_symbol: str, hist: pd.DataFrame,
+                            info: dict) -> dict:
+    """
+    Compute all 7 technical indicators from a pre-downloaded DataFrame.
+    Same output schema as analyze_single_ticker().
+    """
+    try:
+        if hist is None or hist.empty or len(hist) < 30:
+            return {
+                'ticker': ticker_symbol,
+                'company_name': info.get('company_name', ticker_symbol),
+                'status': 'error',
+                'error': 'Data historis tidak cukup (< 30 hari)',
+            }
+
+        closes = hist['Close']
+        highs = hist['High']
+        lows = hist['Low']
+        volumes = hist['Volume']
+
+        company_name = info.get('company_name', ticker_symbol)
+        sector = info.get('sector', 'N/A')
+        market_cap = info.get('market_cap')
+        currency = info.get('currency', 'IDR')
+        price = info.get('price')
+
+        # ── RSI ──
+        rsi_series = calculate_rsi(closes, period=14)
+        rsi_current = float(rsi_series.iloc[-1]) if not rsi_series.empty else None
+        rsi_prev = float(rsi_series.iloc[-2]) if len(rsi_series) >= 2 else None
+        rsi_info = classify_rsi(rsi_current, rsi_prev)
+
+        # ── MACD ──
+        macd_data = calculate_macd(closes)
+        macd_current = float(macd_data['macd_line'].iloc[-1])
+        signal_current = float(macd_data['signal_line'].iloc[-1])
+        histogram_current = float(macd_data['histogram'].iloc[-1])
+        macd_cross = detect_macd_crossover(
+            macd_data['macd_line'], macd_data['signal_line'], lookback=3,
+        )
+
+        # ── EMA Trend ──
+        ema50 = calculate_ema(closes, 50)
+        ema200 = calculate_ema(closes, 200)
+        trend_info = analyze_trend(closes, ema50, ema200)
+
+        # ── Volume ──
+        vol_info = analyze_volume(volumes, period=20)
+
+        # ── ATR ──
+        atr_info = calculate_atr(highs, lows, closes, period=14)
+
+        # ── Bollinger Bands ──
+        bb_info = calculate_bollinger(closes, period=20, std_dev=2.0)
+
+        # ── ADX ──
+        adx_info = calculate_adx(highs, lows, closes, period=14)
+
+        # ── RSI Divergence ──
+        div_info = detect_divergence(closes, rsi_series, lookback=14)
+
+        # ── Confluence Score ──
+        confluence = compute_confluence_score(
+            rsi_zone=rsi_info['zone'],
+            macd_cross_type=macd_cross['type'],
+            volume_signal=vol_info['volume_signal'],
+            trend=trend_info['trend'],
+            atr_signal=atr_info['atr_signal'],
+            bb_signal=bb_info['bb_signal'],
+            adx_signal=adx_info['adx_signal'],
+            divergence=div_info['divergence'],
+        )
+
+        # ── Stop Loss ──
+        stop_loss = None
+        if atr_info['atr'] is not None and price is not None:
+            stop_loss = round(price - 2 * atr_info['atr'], 2)
+        elif atr_info['atr'] is not None and not closes.empty:
+            stop_loss = round(float(closes.iloc[-1]) - 2 * atr_info['atr'], 2)
+
+        # ── Price change ──
+        price_change_pct = None
+        if len(closes) >= 2:
+            prev_close = float(closes.iloc[-2])
+            curr_close = float(closes.iloc[-1])
+            if prev_close > 0:
+                price_change_pct = round(
+                    ((curr_close - prev_close) / prev_close) * 100, 2)
+
+        if price is None and not closes.empty:
+            price = float(closes.iloc[-1])
+
+        return {
+            'ticker': ticker_symbol,
+            'company_name': company_name,
+            'sector': sector,
+            'currency': currency,
+            'price': round(price, 2) if price else None,
+            'price_change_pct': price_change_pct,
+            'market_cap': market_cap,
+            'rsi': round(rsi_current, 2) if rsi_current and not np.isnan(rsi_current) else None,
+            'rsi_zone': rsi_info['zone'],
+            'rsi_label': rsi_info['label'],
+            'rsi_color': rsi_info['color'],
+            'macd_line': round(macd_current, 4) if not np.isnan(macd_current) else None,
+            'signal_line': round(signal_current, 4) if not np.isnan(signal_current) else None,
+            'histogram': round(histogram_current, 4) if not np.isnan(histogram_current) else None,
+            'macd_cross_type': macd_cross['type'],
+            'macd_cross_label': macd_cross['label'],
+            'macd_cross_color': macd_cross['color'],
+            'macd_cross_bars_ago': macd_cross['bars_ago'],
+            'ema50': round(float(ema50.iloc[-1]), 2) if not np.isnan(ema50.iloc[-1]) else None,
+            'ema200': round(float(ema200.iloc[-1]), 2) if not np.isnan(ema200.iloc[-1]) else None,
+            'trend': trend_info['trend'],
+            'trend_label': trend_info['label'],
+            'trend_color': trend_info['color'],
+            'volume_ratio': vol_info['volume_ratio'],
+            'volume_spike': vol_info['volume_spike'],
+            'volume_signal': vol_info['volume_signal'],
+            'volume_label': vol_info['label'],
+            'volume_color': vol_info['color'],
+            'atr': atr_info['atr'],
+            'atr_pct': atr_info['atr_pct'],
+            'atr_signal': atr_info['atr_signal'],
+            'atr_label': atr_info['label'],
+            'atr_color': atr_info['color'],
+            'bb_upper': bb_info['bb_upper'],
+            'bb_lower': bb_info['bb_lower'],
+            'bb_middle': bb_info['bb_middle'],
+            'bb_pct_b': bb_info['bb_pct_b'],
+            'bb_bandwidth': bb_info['bb_bandwidth'],
+            'bb_signal': bb_info['bb_signal'],
+            'bb_label': bb_info['label'],
+            'bb_color': bb_info['color'],
+            'adx': adx_info['adx'],
+            'di_plus': adx_info['di_plus'],
+            'di_minus': adx_info['di_minus'],
+            'adx_signal': adx_info['adx_signal'],
+            'adx_label': adx_info['label'],
+            'adx_color': adx_info['color'],
+            'divergence': div_info['divergence'],
+            'divergence_label': div_info['label'],
+            'divergence_color': div_info['color'],
+            'stop_loss': stop_loss,
+            'confluence_score': confluence['score'],
+            'confidence_count': confluence['confidence_count'],
+            'score_breakdown': confluence['score_breakdown'],
+            'composite_signal': confluence['signal'],
+            'composite_color': confluence['color'],
+            'composite_score': confluence['score'],
+            'status': 'success',
+        }
+    except Exception as e:
+        return {
+            'ticker': ticker_symbol,
+            'company_name': info.get('company_name', ticker_symbol),
+            'status': 'error',
+            'error': str(e),
+        }
+
+
+def batch_download_and_analyze(tickers: list, period: str = '1y') -> list:
+    """
+    Batch-download OHLCV for multiple tickers via yf.download(),
+    then compute indicators + fetch info in parallel.
+    Much faster than per-ticker yf.Ticker().history().
+    """
+    results = []
+    if not tickers:
+        return results
+
+    # Step 1: Batch download all OHLCV data in one network call
+    try:
+        if len(tickers) == 1:
+            raw = yf.download(tickers, period=period, progress=False,
+                              threads=True, auto_adjust=True)
+            # Single ticker → simple DataFrame (no MultiIndex columns)
+            batch_data = {tickers[0]: raw}
+        else:
+            raw = yf.download(tickers, period=period, group_by='ticker',
+                              progress=False, threads=True, auto_adjust=True)
+            batch_data = {}
+            for t in tickers:
+                try:
+                    df = raw[t].dropna(how='all')
+                    batch_data[t] = df
+                except (KeyError, Exception):
+                    batch_data[t] = pd.DataFrame()
+    except Exception as e:
+        logger.error("Batch download failed: %s — falling back to per-ticker", e)
+        # Fallback: use original per-ticker method
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {executor.submit(analyze_single_ticker, t): t
+                       for t in tickers}
+            for future in as_completed(futures):
+                results.append(future.result())
+        return results
+
+    # Step 2: Fetch ticker.info in parallel (for company name, market cap, etc.)
+    info_map = {}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        info_futures = {executor.submit(_fetch_info_safe, t): t
+                        for t in tickers}
+        for future in as_completed(info_futures):
+            t = info_futures[future]
+            info_map[t] = future.result()
+
+    # Step 3: Compute indicators from pre-downloaded data
+    for t in tickers:
+        hist = batch_data.get(t, pd.DataFrame())
+        info = info_map.get(t, {'company_name': t})
+        result = _analyze_from_dataframe(t, hist, info)
+        results.append(result)
+
+    return results
+
+
 # ─── Main Screener Function ──────────────────────────────────────────
 def run_technical_screen(list_key: str,
                          custom_tickers: list = None,
                          min_market_cap: float = None,
-                         max_market_cap: float = None) -> dict:
+                         max_market_cap: float = None,
+                         offset: int = None,
+                         limit: int = None) -> dict:
     """
     Run technical analysis screening on a list of stocks.
 
@@ -712,6 +953,8 @@ def run_technical_screen(list_key: str,
         custom_tickers: Custom ticker symbols (if list_key is 'custom')
         min_market_cap: Minimum market cap filter (None = no minimum)
         max_market_cap: Maximum market cap filter (None = no maximum)
+        offset: Starting index for chunked requests (None = all)
+        limit: Number of tickers per chunk (None = all)
 
     Returns:
         dict with screening results
@@ -732,16 +975,42 @@ def run_technical_screen(list_key: str,
     if not tickers:
         return {'success': False, 'error': 'Tidak ada ticker yang diberikan.'}
 
-    # Parallel scanning
-    results = []
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {
-            executor.submit(analyze_single_ticker, t): t
-            for t in tickers
+    total_tickers = len(tickers)
+
+    # Chunked mode: slice the ticker list
+    is_chunked = offset is not None and limit is not None
+    if is_chunked:
+        batch_tickers = tickers[offset:offset + limit]
+        has_more = (offset + limit) < total_tickers
+    else:
+        batch_tickers = tickers
+        has_more = False
+
+    if not batch_tickers:
+        return {
+            'success': True,
+            'list_name': list_name,
+            'list_description': list_description,
+            'total_scanned': 0,
+            'total_tickers': total_tickers,
+            'offset': offset or 0,
+            'limit': limit or total_tickers,
+            'has_more': False,
+            'success_count': 0,
+            'error_count': 0,
+            'signal_counts': {
+                'strong_buy': 0, 'buy': 0, 'neutral': 0,
+                'sell': 0, 'strong_sell': 0,
+            },
+            'avg_score': 0,
+            'market_cap_presets': {
+                k: v['label'] for k, v in MARKET_CAP_PRESETS.items()
+            },
+            'results': [],
         }
-        for future in as_completed(futures):
-            result = future.result()
-            results.append(result)
+
+    # Use batch download for speed
+    results = batch_download_and_analyze(batch_tickers, period='1y')
 
     # Apply market cap filter
     if min_market_cap is not None or max_market_cap is not None:
@@ -777,7 +1046,8 @@ def run_technical_screen(list_key: str,
             signal_counts[sig] += 1
 
     # Average score
-    scores = [r.get('confluence_score', 0) for r in successful if r.get('confluence_score') is not None]
+    scores = [r.get('confluence_score', 0) for r in successful
+              if r.get('confluence_score') is not None]
     avg_score = round(sum(scores) / len(scores), 1) if scores else 0
 
     return {
@@ -785,6 +1055,10 @@ def run_technical_screen(list_key: str,
         'list_name': list_name,
         'list_description': list_description,
         'total_scanned': len(results),
+        'total_tickers': total_tickers,
+        'offset': offset if offset is not None else 0,
+        'limit': limit if limit is not None else total_tickers,
+        'has_more': has_more,
         'success_count': len(successful),
         'error_count': len(errors),
         'signal_counts': signal_counts,

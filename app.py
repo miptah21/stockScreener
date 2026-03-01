@@ -522,6 +522,8 @@ def create_app(config_class=Config):
         list_key = data.get('list', '').strip()
         custom_tickers = data.get('tickers', [])
         preset = data.get('market_cap_preset', 'all')
+        offset = data.get('offset')
+        limit = data.get('limit')
 
         if not list_key:
             return jsonify({'success': False, 'error': 'Parameter "list" is required.'}), 400
@@ -540,6 +542,8 @@ def create_app(config_class=Config):
             custom_tickers=custom_tickers,
             min_market_cap=min_mc,
             max_market_cap=max_mc,
+            offset=offset,
+            limit=limit,
         )
 
         if not result.get('success'):
@@ -561,23 +565,18 @@ def create_app(config_class=Config):
         list_key = data.get('list', '').strip()
         custom_tickers = data.get('tickers', [])
         preset = data.get('market_cap_preset', 'all')
+        offset = data.get('offset')
+        limit = data.get('limit')
 
         if not list_key:
             return jsonify({'success': False, 'error': 'Parameter "list" is required.'}), 400
 
-        min_mc = data.get('min_market_cap')
-        max_mc = data.get('max_market_cap')
-
-        if preset and preset in SIMPLE_MCAP_PRESETS and preset != 'all':
-            p = SIMPLE_MCAP_PRESETS[preset]
-            min_mc = p['min']
-            max_mc = p['max']
-
         result = run_simple_screen(
             list_key=list_key,
             custom_tickers=custom_tickers,
-            min_market_cap=min_mc,
-            max_market_cap=max_mc,
+            market_cap_preset=preset,
+            offset=offset,
+            limit=limit,
         )
 
         if not result.get('success'):

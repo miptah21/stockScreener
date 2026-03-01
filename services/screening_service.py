@@ -33,7 +33,8 @@ def screen_stocks(list_key, custom_tickers=None):
 
 def run_technical_screen(list_key=None, custom_tickers=None,
                          min_market_cap=None, max_market_cap=None,
-                         market_cap_preset=None):
+                         market_cap_preset=None,
+                         offset=None, limit=None):
     """
     Run multi-indicator technical screening.
 
@@ -42,18 +43,28 @@ def run_technical_screen(list_key=None, custom_tickers=None,
         custom_tickers: Custom tickers if list_key='custom'
         min_market_cap/max_market_cap: Market cap range filter
         market_cap_preset: Preset key like 'small', 'mid', 'large'
+        offset: Starting index for chunked requests
+        limit: Number of tickers per chunk
     """
+    # Resolve preset into min/max if provided
+    if market_cap_preset and market_cap_preset in MARKET_CAP_PRESETS:
+        preset = MARKET_CAP_PRESETS[market_cap_preset]
+        min_market_cap = min_market_cap or preset.get('min')
+        max_market_cap = max_market_cap or preset.get('max')
+
     return _run_technical_screen(
         list_key=list_key,
         custom_tickers=custom_tickers,
         min_market_cap=min_market_cap,
         max_market_cap=max_market_cap,
-        market_cap_preset=market_cap_preset,
+        offset=offset,
+        limit=limit,
     )
 
 
 def run_simple_screen(list_key=None, custom_tickers=None,
-                      market_cap_preset=None):
+                      market_cap_preset=None,
+                      offset=None, limit=None):
     """
     Run simple RSI + MACD screening.
 
@@ -61,9 +72,23 @@ def run_simple_screen(list_key=None, custom_tickers=None,
         list_key: Stock list key or 'custom'
         custom_tickers: Custom tickers if list_key='custom'
         market_cap_preset: Preset key like 'small', 'mid', 'large'
+        offset: Starting index for chunked requests
+        limit: Number of tickers per chunk
     """
+    # Resolve preset into min/max
+    min_mc = None
+    max_mc = None
+    if market_cap_preset and market_cap_preset in SIMPLE_MCAP_PRESETS:
+        preset = SIMPLE_MCAP_PRESETS[market_cap_preset]
+        min_mc = preset.get('min')
+        max_mc = preset.get('max')
+
     return _run_simple_screen(
         list_key=list_key,
         custom_tickers=custom_tickers,
-        market_cap_preset=market_cap_preset,
+        min_market_cap=min_mc,
+        max_market_cap=max_mc,
+        offset=offset,
+        limit=limit,
     )
+

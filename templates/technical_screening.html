@@ -463,6 +463,7 @@
             'idx_teknologi_kesehatan': '💊', 'idx_konsumen_tahan_lama': '🚗',
             'idx_layanan_komersil': '📋', 'idx_lain_lain': '📦',
             'idx_teknologi_elektronik': '🔌', 'sp500_top50': '🇺🇸',
+            'idx_all_ihsg': '🇮🇩',
         };
 
         const idxLists = Object.entries(lists).filter(([, v]) => v.market === 'IDX');
@@ -531,22 +532,82 @@
         document.getElementById('results').classList.remove('active');
         showProgress();
 
+        const CHUNK_SIZE = 50;
+        let offset = 0;
+        let mergedResults = [];
+        let listName = '';
+        let listDesc = '';
+        let totalTickers = 0;
+        let totalSignalCounts = { strong_buy: 0, buy: 0, neutral: 0, sell: 0, strong_sell: 0 };
+        let totalSuccess = 0;
+        let totalErrors = 0;
+        let batchNum = 0;
+
         try {
-            const r = await fetch('/api/technical-screen', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-            const data = await r.json();
+            while (true) {
+                batchNum++;
+                const reqBody = { ...body, offset, limit: CHUNK_SIZE };
 
-            if (!data.success) {
-                showError(data.error || 'Gagal melakukan screening.');
-                return;
+                updateProgress(offset, totalTickers || '...', batchNum);
+
+                const r = await fetch('/api/technical-screen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reqBody),
+                });
+                const data = await r.json();
+
+                if (!data.success) {
+                    showError(data.error || 'Gagal melakukan screening.');
+                    return;
+                }
+
+                // First batch → capture metadata
+                if (batchNum === 1) {
+                    listName = data.list_name;
+                    listDesc = data.list_description;
+                    totalTickers = data.total_tickers;
+                }
+
+                // Accumulate results
+                mergedResults.push(...data.results);
+                totalSuccess += data.success_count;
+                totalErrors += data.error_count;
+
+                // Merge signal counts
+                const sc = data.signal_counts;
+                totalSignalCounts.strong_buy += sc.strong_buy;
+                totalSignalCounts.buy += sc.buy;
+                totalSignalCounts.neutral += sc.neutral;
+                totalSignalCounts.sell += sc.sell;
+                totalSignalCounts.strong_sell += sc.strong_sell;
+
+                // Progressive render
+                const progressPct = Math.min(100, Math.round(((offset + CHUNK_SIZE) / totalTickers) * 100));
+                document.getElementById('progressBar').style.width = progressPct + '%';
+
+                allResults = mergedResults;
+                originalResults = [...mergedResults];
+
+                // Compute avg score across all accumulated results
+                const successResults = mergedResults.filter(r => r.status === 'success');
+                const scores = successResults.map(r => r.confluence_score).filter(s => s != null);
+                const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10 : 0;
+
+                renderResults({
+                    list_name: listName,
+                    list_description: listDesc,
+                    total_scanned: mergedResults.length,
+                    success_count: totalSuccess,
+                    error_count: totalErrors,
+                    signal_counts: totalSignalCounts,
+                    avg_score: avgScore,
+                    results: mergedResults,
+                });
+
+                if (!data.has_more) break;
+                offset += CHUNK_SIZE;
             }
-
-            allResults = data.results;
-            originalResults = [...data.results];
-            renderResults(data);
         } catch (e) {
             showError('Gagal terhubung ke server.');
             console.error(e);
@@ -861,7 +922,17 @@
     // ─── Progress / Error ────────────────────────────────────────
     function showProgress() {
         document.getElementById('progressSection').classList.add('active');
-        document.getElementById('progressBar').style.width = '100%';
+        document.getElementById('progressBar').style.width = '5%';
+        document.getElementById('progressText').textContent = 'Memulai scanning...';
+    }
+    function updateProgress(offset, total, batchNum) {
+        const done = Math.min(offset, typeof total === 'number' ? total : offset);
+        const pct = typeof total === 'number' && total > 0
+            ? Math.min(100, Math.round((done / total) * 100))
+            : 5;
+        document.getElementById('progressBar').style.width = pct + '%';
+        document.getElementById('progressText').textContent =
+            `Batch ${batchNum} — ${done}/${total} saham diproses (${pct}%)`;
     }
     function hideProgress() {
         document.getElementById('progressSection').classList.remove('active');

@@ -435,6 +435,7 @@
             'idx_teknologi_kesehatan': '💊', 'idx_konsumen_tahan_lama': '🚗',
             'idx_layanan_komersil': '📋', 'idx_lain_lain': '📦',
             'idx_teknologi_elektronik': '🔌', 'sp500_top50': '🇺🇸',
+            'idx_all_ihsg': '🇮🇩',
         };
 
         const idxLists = Object.entries(lists).filter(([, v]) => v.market === 'IDX');
@@ -502,22 +503,77 @@
         document.getElementById('results').classList.remove('active');
         document.getElementById('progressSection').classList.add('active');
 
+        const CHUNK_SIZE = 50;
+        let offset = 0;
+        let mergedResults = [];
+        let listName = '';
+        let listDesc = '';
+        let totalTickers = 0;
+        let totalSignalCounts = { strong_buy: 0, buy: 0, neutral: 0, sell: 0, strong_sell: 0 };
+        let totalSuccess = 0;
+        let totalErrors = 0;
+        let batchNum = 0;
+
         try {
-            const r = await fetch('/api/simple-screen', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-            const data = await r.json();
+            while (true) {
+                batchNum++;
+                const reqBody = { ...body, offset, limit: CHUNK_SIZE };
 
-            if (!data.success) {
-                showError(data.error || 'Gagal melakukan screening.');
-                return;
+                // Update progress
+                const done = Math.min(offset, totalTickers || offset);
+                const pct = totalTickers > 0 ? Math.min(100, Math.round((done / totalTickers) * 100)) : 5;
+                document.getElementById('progressText').textContent =
+                    `Batch ${batchNum} — ${done}/${totalTickers || '...'} saham diproses (${pct}%)`;
+
+                const r = await fetch('/api/simple-screen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reqBody),
+                });
+                const data = await r.json();
+
+                if (!data.success) {
+                    showError(data.error || 'Gagal melakukan screening.');
+                    return;
+                }
+
+                // First batch → capture metadata
+                if (batchNum === 1) {
+                    listName = data.list_name;
+                    listDesc = data.list_description;
+                    totalTickers = data.total_tickers;
+                }
+
+                // Accumulate results
+                mergedResults.push(...data.results);
+                totalSuccess += data.success_count;
+                totalErrors += data.error_count;
+
+                // Merge signal counts
+                const sc = data.signal_counts;
+                totalSignalCounts.strong_buy += sc.strong_buy;
+                totalSignalCounts.buy += sc.buy;
+                totalSignalCounts.neutral += sc.neutral;
+                totalSignalCounts.sell += sc.sell;
+                totalSignalCounts.strong_sell += sc.strong_sell;
+
+                allResults = mergedResults;
+                originalResults = [...mergedResults];
+
+                // Progressive render
+                renderResults({
+                    list_name: listName,
+                    list_description: listDesc,
+                    total_scanned: mergedResults.length,
+                    success_count: totalSuccess,
+                    error_count: totalErrors,
+                    signal_counts: totalSignalCounts,
+                    results: mergedResults,
+                });
+
+                if (!data.has_more) break;
+                offset += CHUNK_SIZE;
             }
-
-            allResults = data.results;
-            originalResults = [...data.results];
-            renderResults(data);
         } catch (e) {
             showError('Gagal terhubung ke server.');
             console.error(e);

@@ -382,3 +382,20 @@ STOCK_LISTS = {
 
 
 }
+
+# ===== AUTO-GENERATED: Semua IHSG (gabungan semua sektor IDX) =====
+_all_idx_tickers = []
+_seen = set()
+for _key, _val in STOCK_LISTS.items():
+    if _val.get('market') == 'IDX':
+        for _t in _val['tickers']:
+            if _t not in _seen:
+                _all_idx_tickers.append(_t)
+                _seen.add(_t)
+
+STOCK_LISTS['idx_all_ihsg'] = {
+    'name': 'IHSG',
+    'description': 'Seluruh saham di Bursa Efek Indonesia (gabungan semua sektor)',
+    'market': 'IDX',
+    'tickers': sorted(_all_idx_tickers),
+}
