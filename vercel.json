@@ -1,22 +1,17 @@
 {
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
+  "functions": {
+    "api/index.py": {
+      "runtime": "@vercel/python",
+      "maxDuration": 300,
+      "memory": 1024
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
       "dest": "api/index.py"
     }
   ],
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 300,
-      "memory": 1024
-    }
-  },
   "excludeFiles": [
     ".venv/**",
     "__pycache__/**",
