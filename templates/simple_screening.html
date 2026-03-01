@@ -560,6 +560,14 @@
                 allResults = mergedResults;
                 originalResults = [...mergedResults];
 
+                // Re-sort all accumulated results by score (strong buy → sell)
+                allResults.sort((a, b) => {
+                    if (a.status === 'error' && b.status !== 'error') return 1;
+                    if (a.status !== 'error' && b.status === 'error') return -1;
+                    return (b.composite_score || 0) - (a.composite_score || 0);
+                });
+                originalResults = [...allResults];
+
                 // Progressive render
                 renderResults({
                     list_name: listName,

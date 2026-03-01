@@ -589,6 +589,14 @@
                 allResults = mergedResults;
                 originalResults = [...mergedResults];
 
+                // Re-sort all accumulated results by score (strong buy → sell)
+                allResults.sort((a, b) => {
+                    if (a.status === 'error' && b.status !== 'error') return 1;
+                    if (a.status !== 'error' && b.status === 'error') return -1;
+                    return (b.confluence_score || b.composite_score || 0) - (a.confluence_score || a.composite_score || 0);
+                });
+                originalResults = [...allResults];
+
                 // Compute avg score across all accumulated results
                 const successResults = mergedResults.filter(r => r.status === 'success');
                 const scores = successResults.map(r => r.confluence_score).filter(s => s != null);
