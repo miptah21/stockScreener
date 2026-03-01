@@ -304,20 +304,24 @@ def batch_download_and_analyze_simple(tickers: list,
 
     # Step 1: Batch download all OHLCV data
     try:
-        if len(tickers) == 1:
-            raw = yf.download(tickers, period=period, progress=False,
-                              threads=True, auto_adjust=True)
-            batch_data = {tickers[0]: raw}
-        else:
-            raw = yf.download(tickers, period=period, group_by='ticker',
-                              progress=False, threads=True, auto_adjust=True)
-            batch_data = {}
+        raw = yf.download(tickers, period=period, progress=False,
+                          threads=True, auto_adjust=True)
+        batch_data = {}
+
+        if raw.empty:
+            for t in tickers:
+                batch_data[t] = pd.DataFrame()
+        elif isinstance(raw.columns, pd.MultiIndex):
+            # MultiIndex columns: ('Close', 'BBCA.JK'), etc.
             for t in tickers:
                 try:
-                    df = raw[t].dropna(how='all')
+                    df = raw.xs(t, level=1, axis=1).dropna(how='all')
                     batch_data[t] = df
                 except (KeyError, Exception):
                     batch_data[t] = pd.DataFrame()
+        else:
+            # Simple columns (rare, older yfinance): single ticker
+            batch_data[tickers[0]] = raw
     except Exception as e:
         logger.error("Batch download failed: %s — falling back to per-ticker", e)
         with ThreadPoolExecutor(max_workers=8) as executor:
