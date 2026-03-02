@@ -4,6 +4,45 @@ A comprehensive **Flask-based financial analysis platform** for Indonesian and g
 
 ---
 
+## 🎬 Feature Demos
+
+<details>
+<summary><b>🔍 Financial Dashboard</b> — Fundamental analysis with Bank Quality Score</summary>
+
+![Financial Dashboard Demo](docs/demos/demo_dashboard.webp)
+
+</details>
+
+<details>
+<summary><b>📈 Technical Screener</b> — 7-indicator confluence scoring (0-100)</summary>
+
+![Technical Screener Demo](docs/demos/demo_technical_screener.webp)
+
+</details>
+
+<details>
+<summary><b>📊 Report Screener</b> — Annual report publication scanner</summary>
+
+![Report Screener Demo](docs/demos/demo_report_screener.webp)
+
+</details>
+
+<details>
+<summary><b>💰 Average Price Calculator</b> — 6-month FCA with premium/discount</summary>
+
+![Average Price Demo](docs/demos/demo_avg_price.webp)
+
+</details>
+
+<details>
+<summary><b>👥 Ownership Summary</b> — Institutional & insider holder analysis</summary>
+
+![Ownership Summary Demo](docs/demos/demo_ownership.webp)
+
+</details>
+
+---
+
 ## ✨ Features
 
 ### 🔍 Financial Data Dashboard
