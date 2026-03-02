@@ -71,9 +71,13 @@ finance/
 ├── requirements.txt          # Python dependencies
 ├── .env                      # Environment variables (not in repo)
 │
+├── docs/                     # Project documentation
+│   ├── METRICS.md            # Comprehensive metrics, ratios & strategies guide
+│   └── LESSONS_LEARNED.md    # Development postmortems & prevention rules
+│
 ├── scrapers/                 # Data acquisition layer
 │   ├── yahoo.py              # Yahoo Finance scraper (primary)
-│   ├── fallback.py           # WSJ Markets fallback scraper
+│   ├── fallback.py           # Multi-source fallback scraper
 │   ├── ojk.py                # OJK regulatory data scraper
 │   └── bandarmology.py       # Broker flow analysis (GoAPI)
 │
@@ -255,6 +259,15 @@ The application features a **premium dark glassmorphism** design with:
 | **Compression** | Flask-Compress |
 | **Frontend** | HTML5, Vanilla CSS, JavaScript |
 | **Data Processing** | Pandas, NumPy |
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [METRICS.md](docs/METRICS.md) | Comprehensive guide to all financial metrics, ratios, technical indicators, scoring systems, and integrated trading/investing strategies used across all features |
+| [LESSONS_LEARNED.md](docs/LESSONS_LEARNED.md) | Development postmortems documenting bugs, root causes, fixes, and prevention rules to avoid repeating mistakes |
 
 ---
 
