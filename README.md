@@ -41,6 +41,13 @@ A comprehensive **Flask-based financial analysis platform** for Indonesian and g
 
 </details>
 
+<details>
+<summary><b>🏦 Bandarmology</b> — Broker flow & accumulation/distribution analysis</summary>
+
+![Bandarmology Demo](docs/demos/demo_bandarmology.webp)
+
+</details>
+
 ---
 
 ## ✨ Features
