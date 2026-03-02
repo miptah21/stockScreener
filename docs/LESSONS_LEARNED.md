@@ -16,6 +16,9 @@ Dokumentasi kesalahan dan pelajaran selama proses pengembangan, agar tidak mengu
 8. [Feature Consolidation Complexity](#8-feature-consolidation-complexity)
 9. [Ghost Columns di Yahoo Finance](#9-ghost-columns-di-yahoo-finance)
 10. [ROA Calculation Discrepancy](#10-roa-calculation-discrepancy)
+11. [API Date-Sensitive Errors (Bandarmology)](#11-api-date-sensitive-errors-bandarmology)
+12. [Dokumentasi Terpisah vs Overwrite Risk](#12-dokumentasi-terpisah-vs-overwrite-risk)
+13. [WebP Recording Reliability di GitHub](#13-webp-recording-reliability-di-github)
 
 ---
 
@@ -90,7 +93,7 @@ Menambahkan deteksi otomatis apakah columns adalah MultiIndex atau single-level,
 
 **Checklist saat pakai library data eksternal:**
 - [ ] Test dengan 1 item, dan juga dengan multiple items
-- [ ] Test dengan custom input (bukan hanya predefined list)  
+- [ ] Test dengan custom input (bukan hanya predefined list)
 - [ ] Tambahkan type checking / shape checking sebelum memproses DataFrame
 - [ ] Log format yang diterima untuk debugging
 
@@ -277,6 +280,85 @@ Menyeragamkan semua kalkulasi ROA untuk menggunakan **Average Total Assets** sec
 
 ---
 
+## 11. API Date-Sensitive Errors (Bandarmology)
+
+**Ditemukan saat**: Sesi dokumentasi & demo recording (Maret 2026)
+
+### 🔴 Apa yang salah
+Bandarmology API (`/api/bandarmology`) mengembalikan **HTTP 500** untuk tanggal tertentu (27/02/2026), tapi **berhasil** untuk tanggal lain (26/02/2026). Tidak ada error message yang informatif — hanya generic error.
+
+### 🟡 Root Cause
+GoAPI (data source untuk broker summary) tidak selalu memiliki data untuk setiap tanggal trading. Bisa karena:
+- Data belum diproses oleh provider
+- Hari libur bursa yang tidak terdeteksi
+- Rate limiting dari GoAPI
+
+Backend tidak menghandle kasus "data not available for this date" secara graceful — langsung throw exception yang menjadi 500.
+
+### 🟢 Fix
+Rekomendasi (belum diimplementasikan):
+1. Tambahkan try-catch yang return `{"success": false, "error": "Data tidak tersedia untuk tanggal ini"}`
+2. Frontend menampilkan pesan informatif, bukan generic error
+3. Auto-retry dengan tanggal sebelumnya jika tanggal yang diminta gagal
+
+### 💡 Pelajaran
+> **Rule**: Untuk API yang bergantung pada **ketersediaan data per tanggal**, selalu handle kasus "no data" sebagai **expected condition**, bukan exception.
+
+---
+
+## 12. Dokumentasi Terpisah vs Overwrite Risk
+
+**Ditemukan saat**: Sesi dokumentasi metrik (Maret 2026)
+
+### 🔴 Apa yang salah
+Saat membuat metrics documentation, sempat ada kekhawatiran bahwa konten dokumentasi metrik akan **menimpa** README.md (codebase documentation). User harus mengingatkan bahwa kedua dokumen harus **terpisah**.
+
+### 🟡 Root Cause
+Tidak ada konvensi yang jelas tentang **satu file per concern** untuk dokumentasi.
+
+### 🟢 Fix
+Membuat struktur `docs/` folder yang jelas:
+- `README.md` → codebase/technical overview (ringkas)
+- `docs/METRICS.md` → detail metrik & strategi (komprehensif)
+- `docs/LESSONS_LEARNED.md` → postmortem & pelajaran
+
+### 💡 Pelajaran
+> **Rule**: **Satu file, satu concern**. README untuk overview; detail teknis, metrik, dan operational docs di folder `docs/` masing-masing.
+
+**Konvensi penamaan docs:**
+- `README.md` — "Apa ini dan bagaimana cara pakai?" (max ~300 baris)
+- `docs/METRICS.md` — "Apa arti setiap angka yang ditampilkan?"
+- `docs/LESSONS_LEARNED.md` — "Apa yang pernah salah dan bagaimana mencegahnya?"
+- `docs/DEPLOYMENT.md` — "Bagaimana cara deploy?"
+- `CHANGELOG.md` — "Apa yang berubah di setiap versi?"
+
+---
+
+## 13. WebP Recording Reliability di GitHub
+
+**Ditemukan saat**: Sesi demo recording (Maret 2026)
+
+### 🔴 Apa yang salah
+Dari 6 demo WebP yang di-push ke GitHub:
+- **4 berhasil** render (Dashboard, Technical Screener, Report Screener, Ownership)
+- **2 gagal** (Average Price: "Error generating recording", Bandarmology: "Generating recording...")
+
+### 🟡 Root Cause
+Recording WebP tergantung pada stabilitas browser session. Session panjang atau error di tengah bisa menghasilkan file corrupt yang tetap bisa di-commit tanpa warning.
+
+### 🟢 Fix
+Re-record kedua demo yang gagal, overwrite file lama, commit ulang.
+
+### 💡 Pelajaran
+> **Rule**: **Selalu verifikasi asset media sebelum commit**. Buka file WebP/GIF secara lokal untuk memastikan animasi valid sebelum push.
+
+**Checklist media assets:**
+- [ ] Verifikasi setiap file media bisa dibuka dan diplay secara lokal
+- [ ] Cek file size — file 0KB atau sangat kecil kemungkinan corrupt
+- [ ] Setelah push, cek rendering di GitHub README (hard refresh)
+
+---
+
 ## 📋 Summary of Prevention Rules
 
 | # | Rule | Kategori |
@@ -291,7 +373,10 @@ Menyeragamkan semua kalkulasi ROA untuk menggunakan **Average Total Assets** sec
 | 8 | Konsolidasi fitur ≠ menghapus salah satu | Product |
 | 9 | Validasi data sebelum diproses, filter ghost data | Data Handling |
 | 10 | Satu metrik = satu formula di seluruh aplikasi | Consistency |
+| 11 | Handle "no data" sebagai expected condition, bukan exception | API Design |
+| 12 | Satu file, satu concern — pisahkan jenis dokumentasi | Documentation |
+| 13 | Verifikasi asset media sebelum commit | DevOps |
 
 ---
 
-*Dokumen ini akan terus diupdate seiring berkembangnya proyek.*
+*Terakhir diupdate: 2 Maret 2026*
