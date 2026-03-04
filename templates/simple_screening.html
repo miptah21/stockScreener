@@ -313,6 +313,31 @@
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
         }
+    
+        /* ─── Dropdowns ─────────────────────────────────────────────────── */
+        .nav__dropdown { position: relative; display: inline-block; }
+        .nav__dropdown-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+        .nav__dropdown-menu {
+            position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(10px);
+            background: var(--bg-secondary, #12121a); border: 1px solid var(--glass-border, rgba(255,255,255,0.08));
+            border-radius: var(--radius-sm, 10px); padding: 8px; min-width: 180px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), var(--shadow-glow, 0 0 40px rgba(99, 102, 241, 0.15));
+            backdrop-filter: blur(20px); opacity: 0; visibility: hidden;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 9999;
+        }
+        .nav__dropdown:hover .nav__dropdown-menu, .nav__dropdown:focus-within .nav__dropdown-menu {
+            opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+        }
+        .nav__dropdown-arrow { display: inline-block; transition: transform 0.2s; font-size: 10px; }
+        .nav__dropdown:hover .nav__dropdown-arrow { transform: rotate(180deg); }
+        .nav__dropdown-item {
+            display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+            color: var(--text-secondary, #8b8b9e); text-decoration: none; font-size: 13px; font-weight: 500;
+            border-radius: 8px; transition: var(--transition, all 0.3s ease);
+        }
+        .nav__dropdown-item:hover { background: var(--glass, rgba(255,255,255,0.05)); color: var(--text-primary, #f0f0f0); }
+        .nav__dropdown-item--active { background: rgba(99, 102, 241, 0.1); color: var(--accent-blue, #6366f1); font-weight: 600; }
+
     </style>
 </head>
 <body>
@@ -323,14 +348,35 @@
         <a href="/" class="nav__brand">📊 Finance Scraper</a>
         <div class="nav__links">
             <a href="/" class="nav__link nav__link--default">Dashboard</a>
-            <a href="/screening" class="nav__link nav__link--default">Screening</a>
-            <a href="/technical-screening" class="nav__link nav__link--default">Teknikal</a>
-            <a href="/simple-screening" class="nav__link nav__link--active">RSI & MACD</a>
-            <a href="/avg-price" class="nav__link nav__link--default">Rata-Rata Harga</a>
-            <a href="/ownership" class="nav__link nav__link--default">Ownership</a>
-            <a href="/market-overview" class="nav__link nav__link--default">📈 Market</a>
+            
+            <!-- Screener Dropdown -->
+            <div class="nav__dropdown">
+                <div class="nav__link nav__link--active nav__dropdown-toggle">
+                    🔍 Screeners <span class="nav__dropdown-arrow">▼</span>
+                </div>
+                <div class="nav__dropdown-menu">
+                    <a href="/screening" class="nav__dropdown-item">Fundamental Scrn</a>
+                    <a href="/technical-screening" class="nav__dropdown-item">Technical Scrn</a>
+                    <a href="/simple-screening" class="nav__dropdown-item nav__dropdown-item--active">RSI & MACD</a>
+                </div>
+            </div>
+
+            <!-- Data Dropdown -->
+            <div class="nav__dropdown">
+                <div class="nav__link nav__link--default nav__dropdown-toggle">
+                    📊 Data <span class="nav__dropdown-arrow">▼</span>
+                </div>
+                <div class="nav__dropdown-menu">
+                    <a href="/avg-price" class="nav__dropdown-item">Rata-Rata Harga</a>
+                    <a href="/ownership" class="nav__dropdown-item">Ownership</a>
+                    <a href="/market-overview" class="nav__dropdown-item">Market Overview</a>
+                    <a href="/compare" class="nav__dropdown-item">📊 Compare</a>
+                </div>
+            </div>
+
             <a href="/backtest" class="nav__link nav__link--default">🔬 Backtest</a>
             <a href="/watchlist" class="nav__link nav__link--default">⭐ Watchlist</a>
+            <a href="/sentiment" class="nav__link nav__link--default">🧠 Sentimen</a>
         </div>
     </nav>
 

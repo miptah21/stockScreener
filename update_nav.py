@@ -1,21 +1,8 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Finance Screener{% endblock %}</title>
-    <meta name="description" content="{% block description %}Financial data screener and analysis dashboard.{% endblock %}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=2">
-    {% block head_styles %}{% endblock %}
-</head>
-<body>
+import os, glob
 
-<div class="container">
-    <!-- Nav -->
-    <nav class="nav">
-        <a href="/" class="nav__brand">📊 Finance Scraper</a>
-        <div class="nav__links">
+html_files = glob.glob('templates/*.html')
+
+new_nav = '''        <div class="nav__links">
             <a href="/" class="nav__link {% if active_page == 'dashboard' %}nav__link--active{% else %}nav__link--default{% endif %}">Dashboard</a>
             
             <!-- Screener Dropdown -->
@@ -32,35 +19,41 @@
 
             <!-- Data Dropdown -->
             <div class="nav__dropdown">
-                <div class="nav__link {% if active_page in ['avg-price', 'ownership', 'market', 'compare'] %}nav__link--active{% else %}nav__link--default{% endif %} nav__dropdown-toggle">
+                <div class="nav__link {% if active_page in ['avg-price', 'ownership', 'market'] %}nav__link--active{% else %}nav__link--default{% endif %} nav__dropdown-toggle">
                     📊 Data <span class="nav__dropdown-arrow">▼</span>
                 </div>
                 <div class="nav__dropdown-menu">
                     <a href="/avg-price" class="nav__dropdown-item {% if active_page == 'avg-price' %}nav__dropdown-item--active{% endif %}">Rata-Rata Harga</a>
                     <a href="/ownership" class="nav__dropdown-item {% if active_page == 'ownership' %}nav__dropdown-item--active{% endif %}">Ownership</a>
                     <a href="/market-overview" class="nav__dropdown-item {% if active_page == 'market' %}nav__dropdown-item--active{% endif %}">Market Overview</a>
-                    <a href="/compare" class="nav__dropdown-item {% if active_page == 'compare' %}nav__dropdown-item--active{% endif %}">📊 Compare</a>
                 </div>
             </div>
 
             <a href="/backtest" class="nav__link {% if active_page == 'backtest' %}nav__link--active{% else %}nav__link--default{% endif %}">🔬 Backtest</a>
             <a href="/watchlist" class="nav__link {% if active_page == 'watchlist' %}nav__link--active{% else %}nav__link--default{% endif %}">⭐ Watchlist</a>
-            <a href="/sentiment" class="nav__link {% if active_page == 'sentiment' %}nav__link--active{% else %}nav__link--default{% endif %}">🧠 Sentimen</a>
-        </div>
-    </nav>
+            <a href="/sentiment" class="nav__link {% if active_page == 'sentiment' %}nav__link--active{% else %}nav__link--default{% endif %} nav__link--highlight">🧠 Sentimen</a>
+        </div>'''
 
-    {% block content %}{% endblock %}
+for f in html_files:
+    if f.endswith('base.html') or f.endswith('sentiment.html') or f.endswith('market_overview.html'): 
+        continue
+    with open(f, 'r', encoding='utf-8') as file:
+        content = file.read()
+    
+    start_str = '<div class="nav__links">'
+    end_str = '</nav>'
+    
+    start_idx = content.find(start_str)
+    if start_idx != -1:
+        end_idx = content.find(end_str, start_idx)
+        if end_idx != -1:
+            new_content = content[:start_idx] + new_nav + '\n        ' + content[end_idx:]
+            with open(f, 'w', encoding='utf-8') as file:
+                file.write(new_content)
+            print(f'Successfully updated {f}')
+        else:
+            print(f'No </nav> found after link div in {f}')
+    else:
+        print(f'No link div found in {f}')
 
-    <!-- Footer -->
-    <footer class="footer">
-        {% block footer %}
-        <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a>. Data may be delayed.</p>
-        <p style="margin-top: 6px;">© 2026 Finance Screener. Built with ❤️ for investors.</p>
-        {% endblock %}
-    </footer>
-</div>
-
-{% block scripts %}{% endblock %}
-
-</body>
-</html>
+print("DONE_PROCESSING")

@@ -66,3 +66,9 @@ def sentiment_page():
     """Serve the AI Sentiment Analysis page."""
     return render_template('sentiment.html', active_page='sentiment')
 
+
+@pages_bp.route('/compare')
+def compare_page():
+    """Serve the Comparative Analysis page."""
+    return render_template('compare.html', active_page='compare')
+

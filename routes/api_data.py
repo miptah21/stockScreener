@@ -616,3 +616,44 @@ def api_sentiment():
     except Exception as e:
         logger.exception("Sentiment API error for %s", ticker)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ─── Comparative Analysis ────────────────────────────────────────────
+
+@api_data_bp.route('/api/compare', methods=['POST'])
+def api_compare():
+    """
+    Compare 2-5 stocks side-by-side.
+
+    POST JSON body:
+        tickers (list): List of 2-5 ticker symbols (e.g., ["BBCA.JK", "BBRI.JK"])
+    """
+    from services.compare_service import compare_stocks
+
+    data = request.get_json(silent=True) or {}
+    tickers_raw = data.get('tickers', [])
+
+    if not isinstance(tickers_raw, list):
+        return jsonify({'success': False, 'error': 'tickers must be a list.'}), 400
+
+    # Validate each ticker
+    tickers = []
+    for t in tickers_raw:
+        validated = _validate_ticker(str(t))
+        if validated:
+            tickers.append(validated)
+
+    if len(tickers) < 2:
+        return jsonify({'success': False, 'error': 'At least 2 valid tickers required.'}), 400
+    if len(tickers) > 5:
+        return jsonify({'success': False, 'error': 'Maximum 5 tickers allowed.'}), 400
+
+    try:
+        result = compare_stocks(tickers)
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        logger.exception("Compare API error")
+        return jsonify({'success': False, 'error': str(e)}), 500
