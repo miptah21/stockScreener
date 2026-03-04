@@ -51,6 +51,16 @@ class TestPageRoutes:
         resp = client.get('/market-overview')
         assert resp.status_code == 200
 
+    def test_backtest_page(self, client):
+        resp = client.get('/backtest')
+        assert resp.status_code == 200
+
+    def test_backtest_missing_ticker(self, client):
+        resp = client.post('/api/backtest', json={})
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert data['success'] is False
+
 
 class TestApiInputValidation:
     """Tests for API input validation — no external calls."""

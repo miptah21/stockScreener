@@ -11,3 +11,4 @@ python-dotenv>=1.0.0
 waitress>=3.0
 flask-compress>=1.15
 requests>=2.31.0
+vectorbt>=0.26.0

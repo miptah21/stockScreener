@@ -1,6 +1,6 @@
 """
 Data API Routes — Endpoints for fetching financial data, charts,
-ownership, bandarmology, average price, market dates, and market overview.
+ownership, bandarmology, average price, market dates, market overview, and backtesting.
 """
 
 import re
@@ -14,6 +14,7 @@ from flask import Blueprint, jsonify, request
 from services.scraping_service import get_financials
 from services.screening_service import get_stock_lists, screen_stocks
 from services.market_service import get_market_overview
+from services.backtest_service import run_backtest
 from scrapers.bandarmology import get_broker_summary, calculate_bandar_flow
 
 logger = logging.getLogger(__name__)
@@ -439,4 +440,53 @@ def api_market_overview():
         return jsonify({'success': True, **data})
     except Exception as e:
         logger.exception("Error fetching market overview")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_data_bp.route('/api/backtest', methods=['POST'])
+def api_backtest():
+    """
+    Run a strategy backtest on historical data.
+
+    POST JSON body:
+        ticker (str): Stock ticker (e.g., 'BBCA.JK')
+        strategy_type (str): 'rsi', 'macd', 'ema_cross', or 'combined'
+        params (dict): Strategy-specific parameters
+        period (str): '1y', '2y', '3y', '5y' (default: '2y')
+        initial_capital (int): Starting capital in IDR (default: 100_000_000)
+        fees_pct (float): Broker fees % (default: 0.15)
+    """
+    data = request.get_json(silent=True) or {}
+
+    ticker = data.get('ticker', '').strip()
+    if not ticker:
+        return jsonify({'success': False, 'error': 'Missing ticker'}), 400
+
+    # Validate ticker format
+    clean = _validate_ticker(ticker)
+    if not clean:
+        return jsonify({'success': False, 'error': 'Invalid ticker format'}), 400
+
+    # Append .JK if not present
+    if not clean.endswith('.JK'):
+        clean = clean + '.JK'
+
+    strategy_type = data.get('strategy_type', 'rsi')
+    params = data.get('params', {})
+    period = data.get('period', '2y')
+    initial_capital = int(data.get('initial_capital', 100_000_000))
+    fees_pct = float(data.get('fees_pct', 0.15))
+
+    try:
+        result = run_backtest(
+            ticker=clean,
+            strategy_type=strategy_type,
+            params=params,
+            period=period,
+            initial_capital=initial_capital,
+            fees_pct=fees_pct,
+        )
+        return jsonify(result)
+    except Exception as e:
+        logger.exception("Backtest API error")
         return jsonify({'success': False, 'error': str(e)}), 500

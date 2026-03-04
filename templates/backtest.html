@@ -1,0 +1,620 @@
+{% extends "base.html" %}
+
+{% block title %}Backtesting Engine — Finance Screener{% endblock %}
+{% block description %}Test trading strategies on IDX historical data with RSI, MACD, EMA Cross, and combined strategies.{% endblock %}
+
+{% block head_styles %}
+<style>
+    /* ── Backtest Page Styles ── */
+    .bt-header { text-align: center; margin-bottom: 28px; }
+    .bt-header__badge {
+        display: inline-block;
+        padding: 6px 20px;
+        border-radius: 20px;
+        background: rgba(99, 102, 241, 0.15);
+        color: var(--accent-purple);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+    }
+    .bt-header__title {
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #6366f1, #22d3ee);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 8px;
+    }
+    .bt-header__subtitle { color: var(--text-muted); font-size: 15px; }
+
+    /* ── Layout ── */
+    .bt-layout {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 24px;
+        align-items: start;
+    }
+    @media (max-width: 1024px) {
+        .bt-layout { grid-template-columns: 1fr; }
+    }
+
+    /* ── Strategy Builder Panel ── */
+    .bt-panel {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 24px;
+        backdrop-filter: blur(20px);
+    }
+    .bt-panel__title {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .bt-field { margin-bottom: 16px; }
+    .bt-field__label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+    }
+    .bt-field__input {
+        width: 100%;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--glass-border);
+        background: rgba(255,255,255,0.04);
+        color: var(--text-primary);
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    .bt-field__input:focus { border-color: var(--accent-purple); }
+    .bt-field__input::placeholder { color: var(--text-muted); }
+
+    /* Strategy Tabs */
+    .bt-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .bt-tab {
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--glass-border);
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .bt-tab:hover { border-color: var(--accent-purple); color: var(--text-secondary); }
+    .bt-tab--active {
+        background: rgba(99, 102, 241, 0.15);
+        border-color: var(--accent-purple);
+        color: var(--accent-purple);
+    }
+
+    /* Strategy Params (toggled) */
+    .bt-params { display: none; }
+    .bt-params--active { display: block; }
+
+    /* Run Button */
+    .bt-run-btn {
+        width: 100%;
+        padding: 14px;
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        margin-top: 8px;
+    }
+    .bt-run-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3); }
+    .bt-run-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* ── Results Area ── */
+    .bt-results { display: none; }
+
+    /* Metrics Grid */
+    .bt-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .bt-metric {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        backdrop-filter: blur(20px);
+    }
+    .bt-metric__label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+    }
+    .bt-metric__value {
+        font-size: 1.5rem;
+        font-weight: 800;
+    }
+    .bt-metric__value--up { color: #10b981; }
+    .bt-metric__value--down { color: #ef4444; }
+    .bt-metric__value--neutral { color: var(--text-primary); }
+
+    /* Chart Card */
+    .bt-chart-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 24px;
+        backdrop-filter: blur(20px);
+    }
+    .bt-chart-card__title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+    }
+
+    /* Trade Log */
+    .bt-trades-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 20px;
+        backdrop-filter: blur(20px);
+    }
+    .bt-trades-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    .bt-trades-table th {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        text-align: left;
+    }
+    .bt-trades-table td {
+        padding: 10px 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        color: var(--text-secondary);
+    }
+
+    /* Loading Overlay */
+    .bt-loading {
+        display: none;
+        text-align: center;
+        padding: 40px;
+        color: var(--text-muted);
+    }
+    .bt-loading__spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(255,255,255,0.1);
+        border-top-color: var(--accent-purple);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .bt-error {
+        display: none;
+        text-align: center;
+        padding: 20px;
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.08);
+        border-radius: 12px;
+        margin-bottom: 16px;
+    }
+
+    .bt-message {
+        text-align: center;
+        padding: 16px;
+        color: var(--accent-cyan);
+        background: rgba(34, 211, 238, 0.08);
+        border-radius: 12px;
+        margin-bottom: 16px;
+        font-size: 14px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="bt-header">
+        <div class="bt-header__badge">● 🔬 BACKTESTING ENGINE</div>
+        <h1 class="bt-header__title">Strategy Backtester</h1>
+        <p class="bt-header__subtitle">Uji strategi trading pada data historis IDX dengan VectorBT</p>
+    </div>
+
+    <div class="bt-layout">
+        <!-- Left: Strategy Builder -->
+        <div class="bt-panel">
+            <div class="bt-panel__title">⚙️ Strategy Builder</div>
+
+            <div class="bt-field">
+                <label class="bt-field__label">Ticker</label>
+                <input type="text" class="bt-field__input" id="btTicker" placeholder="BBCA" value="BBCA">
+            </div>
+
+            <div class="bt-field">
+                <label class="bt-field__label">Periode</label>
+                <select class="bt-field__input" id="btPeriod">
+                    <option value="1y">1 Tahun</option>
+                    <option value="2y" selected>2 Tahun</option>
+                    <option value="3y">3 Tahun</option>
+                    <option value="5y">5 Tahun</option>
+                </select>
+            </div>
+
+            <div class="bt-field">
+                <label class="bt-field__label">Strategi</label>
+                <div class="bt-tabs">
+                    <button class="bt-tab bt-tab--active" onclick="selectStrategy('rsi')">RSI</button>
+                    <button class="bt-tab" onclick="selectStrategy('macd')">MACD</button>
+                    <button class="bt-tab" onclick="selectStrategy('ema_cross')">EMA Cross</button>
+                    <button class="bt-tab" onclick="selectStrategy('combined')">Combined</button>
+                </div>
+            </div>
+
+            <!-- RSI Params -->
+            <div id="params_rsi" class="bt-params bt-params--active">
+                <div class="bt-field">
+                    <label class="bt-field__label">RSI Period</label>
+                    <input type="number" class="bt-field__input" id="rsi_period" value="14" min="2" max="50">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">Buy when RSI &lt;</label>
+                    <input type="number" class="bt-field__input" id="rsi_entry" value="30" min="5" max="50">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">Sell when RSI &gt;</label>
+                    <input type="number" class="bt-field__input" id="rsi_exit" value="70" min="50" max="95">
+                </div>
+            </div>
+
+            <!-- MACD Params -->
+            <div id="params_macd" class="bt-params">
+                <div class="bt-field">
+                    <label class="bt-field__label">Fast EMA</label>
+                    <input type="number" class="bt-field__input" id="macd_fast" value="12" min="2" max="50">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">Slow EMA</label>
+                    <input type="number" class="bt-field__input" id="macd_slow" value="26" min="5" max="100">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">Signal Period</label>
+                    <input type="number" class="bt-field__input" id="macd_signal" value="9" min="2" max="30">
+                </div>
+            </div>
+
+            <!-- EMA Cross Params -->
+            <div id="params_ema_cross" class="bt-params">
+                <div class="bt-field">
+                    <label class="bt-field__label">Short EMA</label>
+                    <input type="number" class="bt-field__input" id="ema_short" value="12" min="2" max="50">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">Long EMA</label>
+                    <input type="number" class="bt-field__input" id="ema_long" value="26" min="5" max="200">
+                </div>
+            </div>
+
+            <!-- Combined Params -->
+            <div id="params_combined" class="bt-params">
+                <div class="bt-field">
+                    <label class="bt-field__label">RSI Period</label>
+                    <input type="number" class="bt-field__input" id="c_rsi_period" value="14" min="2" max="50">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">RSI Buy &lt;</label>
+                    <input type="number" class="bt-field__input" id="c_rsi_entry" value="35" min="5" max="50">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">RSI Sell &gt;</label>
+                    <input type="number" class="bt-field__input" id="c_rsi_exit" value="70" min="50" max="95">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">MACD Fast/Slow/Signal</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="number" class="bt-field__input" id="c_macd_fast" value="12" min="2" max="50" style="width:33%">
+                        <input type="number" class="bt-field__input" id="c_macd_slow" value="26" min="5" max="100" style="width:33%">
+                        <input type="number" class="bt-field__input" id="c_macd_signal" value="9" min="2" max="30" style="width:33%">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bt-field">
+                <label class="bt-field__label">Modal Awal (Rp)</label>
+                <input type="number" class="bt-field__input" id="btCapital" value="100000000" min="1000000" step="1000000">
+            </div>
+
+            <div class="bt-field">
+                <label class="bt-field__label">Biaya Broker (%)</label>
+                <input type="number" class="bt-field__input" id="btFees" value="0.15" min="0" max="2" step="0.01">
+            </div>
+
+            <button class="bt-run-btn" id="btRunBtn" onclick="runBacktest()">
+                ▶ Jalankan Backtest
+            </button>
+        </div>
+
+        <!-- Right: Results -->
+        <div>
+            <div id="btLoading" class="bt-loading">
+                <div class="bt-loading__spinner"></div>
+                <div>Menjalankan backtest... (bisa memerlukan beberapa detik)</div>
+            </div>
+            <div id="btError" class="bt-error"></div>
+            <div id="btResults" class="bt-results">
+                <div id="btMessage" class="bt-message" style="display:none;"></div>
+
+                <!-- Metrics -->
+                <div id="btMetrics" class="bt-metrics"></div>
+
+                <!-- Equity Curve -->
+                <div class="bt-chart-card">
+                    <div class="bt-chart-card__title">📈 Equity Curve</div>
+                    <canvas id="equityChart" height="250"></canvas>
+                </div>
+
+                <!-- Trade Log -->
+                <div class="bt-trades-card">
+                    <div class="bt-chart-card__title">📋 Trade Log</div>
+                    <div style="overflow-x:auto;">
+                        <table class="bt-trades-table" id="btTradesTable">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Entry Date</th>
+                                    <th>Entry Price</th>
+                                    <th>Exit Date</th>
+                                    <th>Exit Price</th>
+                                    <th>Size</th>
+                                    <th>P/L (Rp)</th>
+                                    <th>Return %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="btTradesBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    let currentStrategy = 'rsi';
+    let equityChartInstance = null;
+
+    function selectStrategy(type) {
+        currentStrategy = type;
+        document.querySelectorAll('.bt-tab').forEach(t => t.classList.remove('bt-tab--active'));
+        document.querySelectorAll('.bt-params').forEach(p => p.classList.remove('bt-params--active'));
+        event.target.classList.add('bt-tab--active');
+        document.getElementById('params_' + type).classList.add('bt-params--active');
+    }
+
+    function getStrategyParams() {
+        if (currentStrategy === 'rsi') {
+            return {
+                rsi_period: +document.getElementById('rsi_period').value,
+                rsi_entry: +document.getElementById('rsi_entry').value,
+                rsi_exit: +document.getElementById('rsi_exit').value,
+            };
+        } else if (currentStrategy === 'macd') {
+            return {
+                macd_fast: +document.getElementById('macd_fast').value,
+                macd_slow: +document.getElementById('macd_slow').value,
+                macd_signal: +document.getElementById('macd_signal').value,
+            };
+        } else if (currentStrategy === 'ema_cross') {
+            return {
+                ema_short: +document.getElementById('ema_short').value,
+                ema_long: +document.getElementById('ema_long').value,
+            };
+        } else {
+            return {
+                rsi_period: +document.getElementById('c_rsi_period').value,
+                rsi_entry: +document.getElementById('c_rsi_entry').value,
+                rsi_exit: +document.getElementById('c_rsi_exit').value,
+                macd_fast: +document.getElementById('c_macd_fast').value,
+                macd_slow: +document.getElementById('c_macd_slow').value,
+                macd_signal: +document.getElementById('c_macd_signal').value,
+            };
+        }
+    }
+
+    function formatRupiah(n) {
+        if (n == null) return '—';
+        return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+    }
+
+    async function runBacktest() {
+        const ticker = document.getElementById('btTicker').value.trim().toUpperCase();
+        if (!ticker) return alert('Masukkan ticker');
+
+        const btn = document.getElementById('btRunBtn');
+        const loadingEl = document.getElementById('btLoading');
+        const errorEl = document.getElementById('btError');
+        const resultsEl = document.getElementById('btResults');
+        const msgEl = document.getElementById('btMessage');
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Running...';
+        loadingEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        resultsEl.style.display = 'none';
+        msgEl.style.display = 'none';
+
+        try {
+            const body = {
+                ticker: ticker,
+                strategy_type: currentStrategy,
+                params: getStrategyParams(),
+                period: document.getElementById('btPeriod').value,
+                initial_capital: +document.getElementById('btCapital').value,
+                fees_pct: +document.getElementById('btFees').value,
+            };
+
+            const r = await fetch('/api/backtest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await r.json();
+            loadingEl.style.display = 'none';
+
+            if (!data.success) {
+                errorEl.textContent = '❌ ' + (data.error || 'Unknown error');
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            // Show message if present
+            if (data.message) {
+                msgEl.textContent = 'ℹ️ ' + data.message;
+                msgEl.style.display = 'block';
+            }
+
+            resultsEl.style.display = 'block';
+            renderMetrics(data.summary);
+            renderEquityCurve(data.equity_curve);
+            renderTradeLog(data.trades || []);
+
+        } catch (err) {
+            loadingEl.style.display = 'none';
+            errorEl.textContent = '❌ Error: ' + err.message;
+            errorEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '▶ Jalankan Backtest';
+        }
+    }
+
+    function renderMetrics(s) {
+        const metrics = [
+            { label: 'Total Return', value: s.total_return_pct + '%', cls: s.total_return_pct >= 0 ? 'up' : 'down' },
+            { label: 'Buy & Hold', value: s.buy_hold_return_pct + '%', cls: s.buy_hold_return_pct >= 0 ? 'up' : 'down' },
+            { label: 'Win Rate', value: s.win_rate + '%', cls: s.win_rate >= 50 ? 'up' : 'down' },
+            { label: 'Max Drawdown', value: s.max_drawdown_pct + '%', cls: 'down' },
+            { label: 'Sharpe Ratio', value: s.sharpe_ratio, cls: s.sharpe_ratio >= 1 ? 'up' : (s.sharpe_ratio >= 0 ? 'neutral' : 'down') },
+            { label: 'Total Trades', value: s.total_trades, cls: 'neutral' },
+            { label: 'Profit Factor', value: s.profit_factor, cls: s.profit_factor >= 1 ? 'up' : 'down' },
+        ];
+
+        document.getElementById('btMetrics').innerHTML = metrics.map(m => `
+            <div class="bt-metric">
+                <div class="bt-metric__label">${m.label}</div>
+                <div class="bt-metric__value bt-metric__value--${m.cls}">${m.value}</div>
+            </div>
+        `).join('');
+    }
+
+    function renderEquityCurve(curve) {
+        const ctx = document.getElementById('equityChart').getContext('2d');
+
+        if (equityChartInstance) equityChartInstance.destroy();
+
+        equityChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: curve.dates,
+                datasets: [{
+                    label: 'Equity (Rp)',
+                    data: curve.values,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHitRadius: 10,
+                }],
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => formatRupiah(ctx.raw),
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#6b7280', maxTicksLimit: 12, font: { size: 10 } },
+                        grid: { color: 'rgba(255,255,255,0.03)' },
+                    },
+                    y: {
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            callback: v => (v / 1e6).toFixed(0) + 'M',
+                        },
+                        grid: { color: 'rgba(255,255,255,0.03)' },
+                    },
+                },
+            },
+        });
+    }
+
+    function renderTradeLog(trades) {
+        const tbody = document.getElementById('btTradesBody');
+        if (!trades.length) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">Tidak ada trade</td></tr>';
+            return;
+        }
+        tbody.innerHTML = trades.map((t, i) => {
+            const cls = t.return_pct >= 0 ? 'color:#10b981;' : 'color:#ef4444;';
+            return `<tr>
+                <td>${i + 1}</td>
+                <td>${t.entry_date}</td>
+                <td>${formatRupiah(t.entry_price)}</td>
+                <td>${t.exit_date}</td>
+                <td>${formatRupiah(t.exit_price)}</td>
+                <td>${Math.round(t.size)}</td>
+                <td style="${cls}font-weight:700;">${formatRupiah(t.pnl)}</td>
+                <td style="${cls}font-weight:700;">${t.return_pct >= 0 ? '+' : ''}${t.return_pct}%</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // Enter key to run
+    document.getElementById('btTicker').addEventListener('keydown', e => {
+        if (e.key === 'Enter') runBacktest();
+    });
+</script>
+{% endblock %}

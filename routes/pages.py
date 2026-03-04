@@ -54,3 +54,9 @@ def market_overview_page():
     """Serve the Market Overview Dashboard page."""
     return render_template('market_overview.html', active_page='market')
 
+
+@pages_bp.route('/backtest')
+def backtest_page():
+    """Serve the Backtesting Engine page."""
+    return render_template('backtest.html', active_page='backtest')
+
