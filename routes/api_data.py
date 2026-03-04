@@ -476,6 +476,8 @@ def api_backtest():
     period = data.get('period', '2y')
     initial_capital = int(data.get('initial_capital', 100_000_000))
     fees_pct = float(data.get('fees_pct', 0.15))
+    stop_loss_pct = float(data.get('stop_loss_pct', 0))
+    take_profit_pct = float(data.get('take_profit_pct', 0))
 
     try:
         result = run_backtest(
@@ -485,6 +487,8 @@ def api_backtest():
             period=period,
             initial_capital=initial_capital,
             fees_pct=fees_pct,
+            stop_loss_pct=stop_loss_pct,
+            take_profit_pct=take_profit_pct,
         )
         return jsonify(result)
     except Exception as e:

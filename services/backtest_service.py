@@ -167,7 +167,8 @@ def _extract_trades(portfolio):
 
 
 def run_backtest(ticker, strategy_type, params, period='2y',
-                 initial_capital=100_000_000, fees_pct=0.15):
+                 initial_capital=100_000_000, fees_pct=0.15,
+                 stop_loss_pct=0, take_profit_pct=0):
     """
     Run a backtest for a given ticker and strategy.
 
@@ -178,9 +179,12 @@ def run_backtest(ticker, strategy_type, params, period='2y',
         period: Historical period ('1y', '2y', '3y', '5y')
         initial_capital: Starting capital in IDR
         fees_pct: Round-trip broker fees percentage
+        stop_loss_pct: Stop loss percentage (0 = disabled)
+        take_profit_pct: Take profit percentage (0 = disabled)
 
     Returns:
-        dict with success, summary, equity_curve, trades
+        dict with success, summary, equity_curve, drawdown_curve,
+        price_data, benchmark_curve, trades
     """
     if period not in VALID_PERIODS:
         return {'success': False, 'error': f'Invalid period. Use: {VALID_PERIODS}'}
@@ -221,20 +225,30 @@ def run_backtest(ticker, strategy_type, params, period='2y',
                               closes.index[-1].strftime('%Y-%m-%d')],
                     'values': [initial_capital, initial_capital],
                 },
+                'drawdown_curve': {'dates': [], 'values': []},
+                'price_data': {'dates': [], 'prices': []},
+                'benchmark_curve': {'dates': [], 'values': []},
                 'trades': [],
                 'message': 'Tidak ada sinyal trading yang dihasilkan. Coba sesuaikan parameter strategi.',
             }
 
         # 3. Run VectorBT portfolio simulation
-        fees = fees_pct / 100  # Convert percentage to decimal
-        portfolio = vbt.Portfolio.from_signals(
-            closes,
+        fees = fees_pct / 100
+        pf_kwargs = dict(
+            close=closes,
             entries=entries,
             exits=exits,
             init_cash=initial_capital,
             fees=fees,
             freq='1D',
         )
+        # Add stop loss / take profit if specified
+        if stop_loss_pct and stop_loss_pct > 0:
+            pf_kwargs['sl_stop'] = stop_loss_pct / 100
+        if take_profit_pct and take_profit_pct > 0:
+            pf_kwargs['tp_stop'] = take_profit_pct / 100
+
+        portfolio = vbt.Portfolio.from_signals(**pf_kwargs)
 
         # 4. Extract metrics
         stats = portfolio.stats()
@@ -264,7 +278,6 @@ def run_backtest(ticker, strategy_type, params, period='2y',
 
         # 5. Equity curve
         equity = portfolio.value()
-        # Downsample if too many points (> 500)
         if len(equity) > 500:
             step = max(1, len(equity) // 500)
             equity_sampled = equity.iloc[::step]
@@ -274,7 +287,41 @@ def run_backtest(ticker, strategy_type, params, period='2y',
         equity_dates = [d.strftime('%Y-%m-%d') for d in equity_sampled.index]
         equity_values = [round(_safe_val(v), 0) for v in equity_sampled.values]
 
-        # 6. Trade log
+        # 6. Drawdown curve
+        drawdown = portfolio.drawdown()
+        if len(drawdown) > 500:
+            dd_sampled = drawdown.iloc[::step]
+        else:
+            dd_sampled = drawdown
+        dd_dates = [d.strftime('%Y-%m-%d') for d in dd_sampled.index]
+        dd_values = [round(_safe_val(v) * 100, 2) for v in dd_sampled.values]
+
+        # 7. Price data for chart
+        if len(closes) > 500:
+            price_sampled = closes.iloc[::step]
+        else:
+            price_sampled = closes
+        price_dates = [d.strftime('%Y-%m-%d') for d in price_sampled.index]
+        price_values = [round(_safe_val(v), 0) for v in price_sampled.values]
+
+        # 8. Benchmark (IHSG / ^JKSE)
+        benchmark_data = {'dates': [], 'values': []}
+        try:
+            ihsg = yf.Ticker('^JKSE').history(period=period)
+            if not ihsg.empty and len(ihsg) > 10:
+                ihsg_norm = (ihsg['Close'] / ihsg['Close'].iloc[0]) * initial_capital
+                if len(ihsg_norm) > 500:
+                    ihsg_sampled = ihsg_norm.iloc[::max(1, len(ihsg_norm) // 500)]
+                else:
+                    ihsg_sampled = ihsg_norm
+                benchmark_data = {
+                    'dates': [d.strftime('%Y-%m-%d') for d in ihsg_sampled.index],
+                    'values': [round(_safe_val(v), 0) for v in ihsg_sampled.values],
+                }
+        except Exception:
+            pass  # Non-critical, skip if fails
+
+        # 9. Trade log
         trade_log = _extract_trades(portfolio)
 
         return {
@@ -292,9 +339,19 @@ def run_backtest(ticker, strategy_type, params, period='2y',
                 'dates': equity_dates,
                 'values': equity_values,
             },
+            'drawdown_curve': {
+                'dates': dd_dates,
+                'values': dd_values,
+            },
+            'price_data': {
+                'dates': price_dates,
+                'prices': price_values,
+            },
+            'benchmark_curve': benchmark_data,
             'trades': trade_log,
         }
 
     except Exception as e:
         logger.exception(f"Backtest error for {ticker}")
         return {'success': False, 'error': str(e)}
+

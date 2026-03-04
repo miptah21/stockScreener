@@ -78,17 +78,16 @@
         font-size: 14px;
         outline: none;
         transition: border-color 0.2s;
+        box-sizing: border-box;
     }
     .bt-field__input:focus { border-color: var(--accent-purple); }
     .bt-field__input::placeholder { color: var(--text-muted); }
+    .bt-field__row { display: flex; gap: 10px; }
+    .bt-field__row .bt-field { flex: 1; margin-bottom: 0; }
+    .bt-field__hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 
     /* Strategy Tabs */
-    .bt-tabs {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 16px;
-        flex-wrap: wrap;
-    }
+    .bt-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
     .bt-tab {
         padding: 8px 14px;
         border-radius: 8px;
@@ -110,6 +109,13 @@
     /* Strategy Params (toggled) */
     .bt-params { display: none; }
     .bt-params--active { display: block; }
+
+    /* Separator */
+    .bt-sep {
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        margin: 16px 0;
+    }
 
     /* Run Button */
     .bt-run-btn {
@@ -134,7 +140,7 @@
     /* Metrics Grid */
     .bt-metrics {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
         gap: 12px;
         margin-bottom: 24px;
     }
@@ -154,10 +160,7 @@
         letter-spacing: 0.5px;
         margin-bottom: 6px;
     }
-    .bt-metric__value {
-        font-size: 1.5rem;
-        font-weight: 800;
-    }
+    .bt-metric__value { font-size: 1.4rem; font-weight: 800; }
     .bt-metric__value--up { color: #10b981; }
     .bt-metric__value--down { color: #ef4444; }
     .bt-metric__value--neutral { color: var(--text-primary); }
@@ -168,7 +171,7 @@
         border: 1px solid var(--glass-border);
         border-radius: 14px;
         padding: 20px;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
         backdrop-filter: blur(20px);
     }
     .bt-chart-card__title {
@@ -177,6 +180,27 @@
         color: var(--text-primary);
         margin-bottom: 12px;
     }
+    .bt-chart-card__legend {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+    .bt-chart-card__legend span::before {
+        content: '';
+        display: inline-block;
+        width: 12px;
+        height: 3px;
+        border-radius: 2px;
+        margin-right: 6px;
+        vertical-align: middle;
+    }
+    .legend-equity::before { background: #6366f1; }
+    .legend-benchmark::before { background: #6b7280; border-style: dashed; }
+    .legend-buy::before { background: #10b981; width: 8px; height: 8px; border-radius: 50%; }
+    .legend-sell::before { background: #ef4444; width: 8px; height: 8px; border-radius: 50%; }
 
     /* Trade Log */
     .bt-trades-card {
@@ -186,11 +210,7 @@
         padding: 20px;
         backdrop-filter: blur(20px);
     }
-    .bt-trades-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-    }
+    .bt-trades-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .bt-trades-table th {
         font-size: 11px;
         font-weight: 600;
@@ -207,16 +227,10 @@
         color: var(--text-secondary);
     }
 
-    /* Loading Overlay */
-    .bt-loading {
-        display: none;
-        text-align: center;
-        padding: 40px;
-        color: var(--text-muted);
-    }
+    /* Loading / Error / Message */
+    .bt-loading { display: none; text-align: center; padding: 40px; color: var(--text-muted); }
     .bt-loading__spinner {
-        width: 36px;
-        height: 36px;
+        width: 36px; height: 36px;
         border: 3px solid rgba(255,255,255,0.1);
         border-top-color: var(--accent-purple);
         border-radius: 50%;
@@ -224,26 +238,12 @@
         margin: 0 auto 12px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .bt-error { display: none; text-align: center; padding: 20px; color: #ef4444; background: rgba(239,68,68,0.08); border-radius: 12px; margin-bottom: 16px; }
+    .bt-message { text-align: center; padding: 16px; color: var(--accent-cyan); background: rgba(34,211,238,0.08); border-radius: 12px; margin-bottom: 16px; font-size: 14px; }
 
-    .bt-error {
-        display: none;
-        text-align: center;
-        padding: 20px;
-        color: #ef4444;
-        background: rgba(239, 68, 68, 0.08);
-        border-radius: 12px;
-        margin-bottom: 16px;
-    }
-
-    .bt-message {
-        text-align: center;
-        padding: 16px;
-        color: var(--accent-cyan);
-        background: rgba(34, 211, 238, 0.08);
-        border-radius: 12px;
-        margin-bottom: 16px;
-        font-size: 14px;
-    }
+    /* Chart grid */
+    .bt-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    @media (max-width: 900px) { .bt-charts-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
@@ -290,76 +290,109 @@
                     <label class="bt-field__label">RSI Period</label>
                     <input type="number" class="bt-field__input" id="rsi_period" value="14" min="2" max="50">
                 </div>
-                <div class="bt-field">
-                    <label class="bt-field__label">Buy when RSI &lt;</label>
-                    <input type="number" class="bt-field__input" id="rsi_entry" value="30" min="5" max="50">
-                </div>
-                <div class="bt-field">
-                    <label class="bt-field__label">Sell when RSI &gt;</label>
-                    <input type="number" class="bt-field__input" id="rsi_exit" value="70" min="50" max="95">
+                <div class="bt-field__row">
+                    <div class="bt-field">
+                        <label class="bt-field__label">Buy RSI &lt;</label>
+                        <input type="number" class="bt-field__input" id="rsi_entry" value="30" min="5" max="50">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Sell RSI &gt;</label>
+                        <input type="number" class="bt-field__input" id="rsi_exit" value="70" min="50" max="95">
+                    </div>
                 </div>
             </div>
 
             <!-- MACD Params -->
             <div id="params_macd" class="bt-params">
-                <div class="bt-field">
-                    <label class="bt-field__label">Fast EMA</label>
-                    <input type="number" class="bt-field__input" id="macd_fast" value="12" min="2" max="50">
-                </div>
-                <div class="bt-field">
-                    <label class="bt-field__label">Slow EMA</label>
-                    <input type="number" class="bt-field__input" id="macd_slow" value="26" min="5" max="100">
-                </div>
-                <div class="bt-field">
-                    <label class="bt-field__label">Signal Period</label>
-                    <input type="number" class="bt-field__input" id="macd_signal" value="9" min="2" max="30">
+                <div class="bt-field__row">
+                    <div class="bt-field">
+                        <label class="bt-field__label">Fast</label>
+                        <input type="number" class="bt-field__input" id="macd_fast" value="12" min="2" max="50">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Slow</label>
+                        <input type="number" class="bt-field__input" id="macd_slow" value="26" min="5" max="100">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Signal</label>
+                        <input type="number" class="bt-field__input" id="macd_signal" value="9" min="2" max="30">
+                    </div>
                 </div>
             </div>
 
             <!-- EMA Cross Params -->
             <div id="params_ema_cross" class="bt-params">
-                <div class="bt-field">
-                    <label class="bt-field__label">Short EMA</label>
-                    <input type="number" class="bt-field__input" id="ema_short" value="12" min="2" max="50">
-                </div>
-                <div class="bt-field">
-                    <label class="bt-field__label">Long EMA</label>
-                    <input type="number" class="bt-field__input" id="ema_long" value="26" min="5" max="200">
+                <div class="bt-field__row">
+                    <div class="bt-field">
+                        <label class="bt-field__label">Short EMA</label>
+                        <input type="number" class="bt-field__input" id="ema_short" value="12" min="2" max="50">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Long EMA</label>
+                        <input type="number" class="bt-field__input" id="ema_long" value="26" min="5" max="200">
+                    </div>
                 </div>
             </div>
 
             <!-- Combined Params -->
             <div id="params_combined" class="bt-params">
-                <div class="bt-field">
-                    <label class="bt-field__label">RSI Period</label>
-                    <input type="number" class="bt-field__input" id="c_rsi_period" value="14" min="2" max="50">
+                <div class="bt-field__row">
+                    <div class="bt-field">
+                        <label class="bt-field__label">RSI Period</label>
+                        <input type="number" class="bt-field__input" id="c_rsi_period" value="14" min="2" max="50">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Buy &lt;</label>
+                        <input type="number" class="bt-field__input" id="c_rsi_entry" value="35" min="5" max="50">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Sell &gt;</label>
+                        <input type="number" class="bt-field__input" id="c_rsi_exit" value="70" min="50" max="95">
+                    </div>
                 </div>
-                <div class="bt-field">
-                    <label class="bt-field__label">RSI Buy &lt;</label>
-                    <input type="number" class="bt-field__input" id="c_rsi_entry" value="35" min="5" max="50">
-                </div>
-                <div class="bt-field">
-                    <label class="bt-field__label">RSI Sell &gt;</label>
-                    <input type="number" class="bt-field__input" id="c_rsi_exit" value="70" min="50" max="95">
-                </div>
-                <div class="bt-field">
-                    <label class="bt-field__label">MACD Fast/Slow/Signal</label>
-                    <div style="display:flex;gap:8px;">
-                        <input type="number" class="bt-field__input" id="c_macd_fast" value="12" min="2" max="50" style="width:33%">
-                        <input type="number" class="bt-field__input" id="c_macd_slow" value="26" min="5" max="100" style="width:33%">
-                        <input type="number" class="bt-field__input" id="c_macd_signal" value="9" min="2" max="30" style="width:33%">
+                <div class="bt-field__row" style="margin-top:12px;">
+                    <div class="bt-field">
+                        <label class="bt-field__label">MACD Fast</label>
+                        <input type="number" class="bt-field__input" id="c_macd_fast" value="12" min="2" max="50">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Slow</label>
+                        <input type="number" class="bt-field__input" id="c_macd_slow" value="26" min="5" max="100">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Signal</label>
+                        <input type="number" class="bt-field__input" id="c_macd_signal" value="9" min="2" max="30">
                     </div>
                 </div>
             </div>
 
-            <div class="bt-field">
-                <label class="bt-field__label">Modal Awal (Rp)</label>
-                <input type="number" class="bt-field__input" id="btCapital" value="100000000" min="1000000" step="1000000">
+            <hr class="bt-sep">
+
+            <!-- Risk Management -->
+            <div class="bt-field__row">
+                <div class="bt-field">
+                    <label class="bt-field__label">🛑 Stop Loss %</label>
+                    <input type="number" class="bt-field__input" id="btStopLoss" value="0" min="0" max="50" step="0.5">
+                    <div class="bt-field__hint">0 = nonaktif</div>
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">🎯 Take Profit %</label>
+                    <input type="number" class="bt-field__input" id="btTakeProfit" value="0" min="0" max="100" step="0.5">
+                    <div class="bt-field__hint">0 = nonaktif</div>
+                </div>
             </div>
 
-            <div class="bt-field">
-                <label class="bt-field__label">Biaya Broker (%)</label>
-                <input type="number" class="bt-field__input" id="btFees" value="0.15" min="0" max="2" step="0.01">
+            <hr class="bt-sep">
+
+            <div class="bt-field__row">
+                <div class="bt-field">
+                    <label class="bt-field__label">Modal (Rp)</label>
+                    <input type="number" class="bt-field__input" id="btCapital" value="100000000" min="1000000" step="1000000">
+                </div>
+                <div class="bt-field">
+                    <label class="bt-field__label">Fee (%)</label>
+                    <input type="number" class="bt-field__input" id="btFees" value="0.15" min="0" max="2" step="0.01">
+                </div>
             </div>
 
             <button class="bt-run-btn" id="btRunBtn" onclick="runBacktest()">
@@ -380,10 +413,30 @@
                 <!-- Metrics -->
                 <div id="btMetrics" class="bt-metrics"></div>
 
-                <!-- Equity Curve -->
+                <!-- Equity Curve + Benchmark -->
                 <div class="bt-chart-card">
-                    <div class="bt-chart-card__title">📈 Equity Curve</div>
-                    <canvas id="equityChart" height="250"></canvas>
+                    <div class="bt-chart-card__title">📈 Equity Curve vs IHSG Benchmark</div>
+                    <canvas id="equityChart" height="220"></canvas>
+                    <div class="bt-chart-card__legend">
+                        <span class="legend-equity">Strategy Equity</span>
+                        <span class="legend-benchmark">IHSG Benchmark</span>
+                    </div>
+                </div>
+
+                <!-- Price Chart + Drawdown (side by side) -->
+                <div class="bt-charts-grid">
+                    <div class="bt-chart-card">
+                        <div class="bt-chart-card__title">💹 Price + Trade Signals</div>
+                        <canvas id="priceChart" height="200"></canvas>
+                        <div class="bt-chart-card__legend">
+                            <span class="legend-buy">Buy</span>
+                            <span class="legend-sell">Sell</span>
+                        </div>
+                    </div>
+                    <div class="bt-chart-card">
+                        <div class="bt-chart-card__title">📉 Drawdown</div>
+                        <canvas id="drawdownChart" height="200"></canvas>
+                    </div>
                 </div>
 
                 <!-- Trade Log -->
@@ -394,13 +447,13 @@
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>Entry Date</th>
+                                    <th>Entry</th>
                                     <th>Entry Price</th>
-                                    <th>Exit Date</th>
+                                    <th>Exit</th>
                                     <th>Exit Price</th>
                                     <th>Size</th>
-                                    <th>P/L (Rp)</th>
-                                    <th>Return %</th>
+                                    <th>P/L</th>
+                                    <th>Return</th>
                                 </tr>
                             </thead>
                             <tbody id="btTradesBody"></tbody>
@@ -416,7 +469,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
     let currentStrategy = 'rsi';
-    let equityChartInstance = null;
+    let charts = {};
 
     function selectStrategy(type) {
         currentStrategy = type;
@@ -428,37 +481,20 @@
 
     function getStrategyParams() {
         if (currentStrategy === 'rsi') {
-            return {
-                rsi_period: +document.getElementById('rsi_period').value,
-                rsi_entry: +document.getElementById('rsi_entry').value,
-                rsi_exit: +document.getElementById('rsi_exit').value,
-            };
+            return { rsi_period: +document.getElementById('rsi_period').value, rsi_entry: +document.getElementById('rsi_entry').value, rsi_exit: +document.getElementById('rsi_exit').value };
         } else if (currentStrategy === 'macd') {
-            return {
-                macd_fast: +document.getElementById('macd_fast').value,
-                macd_slow: +document.getElementById('macd_slow').value,
-                macd_signal: +document.getElementById('macd_signal').value,
-            };
+            return { macd_fast: +document.getElementById('macd_fast').value, macd_slow: +document.getElementById('macd_slow').value, macd_signal: +document.getElementById('macd_signal').value };
         } else if (currentStrategy === 'ema_cross') {
-            return {
-                ema_short: +document.getElementById('ema_short').value,
-                ema_long: +document.getElementById('ema_long').value,
-            };
+            return { ema_short: +document.getElementById('ema_short').value, ema_long: +document.getElementById('ema_long').value };
         } else {
-            return {
-                rsi_period: +document.getElementById('c_rsi_period').value,
-                rsi_entry: +document.getElementById('c_rsi_entry').value,
-                rsi_exit: +document.getElementById('c_rsi_exit').value,
-                macd_fast: +document.getElementById('c_macd_fast').value,
-                macd_slow: +document.getElementById('c_macd_slow').value,
-                macd_signal: +document.getElementById('c_macd_signal').value,
-            };
+            return { rsi_period: +document.getElementById('c_rsi_period').value, rsi_entry: +document.getElementById('c_rsi_entry').value, rsi_exit: +document.getElementById('c_rsi_exit').value, macd_fast: +document.getElementById('c_macd_fast').value, macd_slow: +document.getElementById('c_macd_slow').value, macd_signal: +document.getElementById('c_macd_signal').value };
         }
     }
 
-    function formatRupiah(n) {
-        if (n == null) return '—';
-        return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+    function fmtRp(n) { return n == null ? '—' : 'Rp ' + Math.round(n).toLocaleString('id-ID'); }
+
+    function destroyChart(key) {
+        if (charts[key]) { charts[key].destroy(); charts[key] = null; }
     }
 
     async function runBacktest() {
@@ -480,12 +516,14 @@
 
         try {
             const body = {
-                ticker: ticker,
+                ticker,
                 strategy_type: currentStrategy,
                 params: getStrategyParams(),
                 period: document.getElementById('btPeriod').value,
                 initial_capital: +document.getElementById('btCapital').value,
                 fees_pct: +document.getElementById('btFees').value,
+                stop_loss_pct: +document.getElementById('btStopLoss').value,
+                take_profit_pct: +document.getElementById('btTakeProfit').value,
             };
 
             const r = await fetch('/api/backtest', {
@@ -502,15 +540,13 @@
                 return;
             }
 
-            // Show message if present
-            if (data.message) {
-                msgEl.textContent = 'ℹ️ ' + data.message;
-                msgEl.style.display = 'block';
-            }
+            if (data.message) { msgEl.textContent = 'ℹ️ ' + data.message; msgEl.style.display = 'block'; }
 
             resultsEl.style.display = 'block';
             renderMetrics(data.summary);
-            renderEquityCurve(data.equity_curve);
+            renderEquityCurve(data.equity_curve, data.benchmark_curve);
+            renderPriceChart(data.price_data, data.trades || []);
+            renderDrawdownChart(data.drawdown_curve);
             renderTradeLog(data.trades || []);
 
         } catch (err) {
@@ -524,68 +560,154 @@
     }
 
     function renderMetrics(s) {
-        const metrics = [
-            { label: 'Total Return', value: s.total_return_pct + '%', cls: s.total_return_pct >= 0 ? 'up' : 'down' },
-            { label: 'Buy & Hold', value: s.buy_hold_return_pct + '%', cls: s.buy_hold_return_pct >= 0 ? 'up' : 'down' },
-            { label: 'Win Rate', value: s.win_rate + '%', cls: s.win_rate >= 50 ? 'up' : 'down' },
-            { label: 'Max Drawdown', value: s.max_drawdown_pct + '%', cls: 'down' },
-            { label: 'Sharpe Ratio', value: s.sharpe_ratio, cls: s.sharpe_ratio >= 1 ? 'up' : (s.sharpe_ratio >= 0 ? 'neutral' : 'down') },
-            { label: 'Total Trades', value: s.total_trades, cls: 'neutral' },
-            { label: 'Profit Factor', value: s.profit_factor, cls: s.profit_factor >= 1 ? 'up' : 'down' },
+        const m = [
+            { l: 'Total Return', v: s.total_return_pct + '%', c: s.total_return_pct >= 0 ? 'up' : 'down' },
+            { l: 'Buy & Hold', v: s.buy_hold_return_pct + '%', c: s.buy_hold_return_pct >= 0 ? 'up' : 'down' },
+            { l: 'Win Rate', v: s.win_rate + '%', c: s.win_rate >= 50 ? 'up' : 'down' },
+            { l: 'Max Drawdown', v: s.max_drawdown_pct + '%', c: 'down' },
+            { l: 'Sharpe', v: s.sharpe_ratio, c: s.sharpe_ratio >= 1 ? 'up' : (s.sharpe_ratio >= 0 ? 'neutral' : 'down') },
+            { l: 'Trades', v: s.total_trades, c: 'neutral' },
+            { l: 'Profit Factor', v: s.profit_factor, c: s.profit_factor >= 1 ? 'up' : 'down' },
         ];
-
-        document.getElementById('btMetrics').innerHTML = metrics.map(m => `
+        document.getElementById('btMetrics').innerHTML = m.map(i => `
             <div class="bt-metric">
-                <div class="bt-metric__label">${m.label}</div>
-                <div class="bt-metric__value bt-metric__value--${m.cls}">${m.value}</div>
+                <div class="bt-metric__label">${i.l}</div>
+                <div class="bt-metric__value bt-metric__value--${i.c}">${i.v}</div>
             </div>
         `).join('');
     }
 
-    function renderEquityCurve(curve) {
+    function renderEquityCurve(eq, bm) {
+        destroyChart('equity');
         const ctx = document.getElementById('equityChart').getContext('2d');
+        const datasets = [{
+            label: 'Strategy',
+            data: eq.values,
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99,102,241,0.08)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHitRadius: 10,
+        }];
+        // Add benchmark if available
+        if (bm && bm.dates && bm.dates.length > 0) {
+            datasets.push({
+                label: 'IHSG',
+                data: bm.values,
+                borderColor: '#6b7280',
+                borderWidth: 1.5,
+                borderDash: [6, 3],
+                fill: false,
+                tension: 0.3,
+                pointRadius: 0,
+            });
+        }
+        // Use the longer date array
+        const labels = eq.dates.length >= (bm?.dates?.length || 0) ? eq.dates : bm.dates;
+        charts.equity = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtRp(c.raw) } } },
+                scales: {
+                    x: { ticks: { color: '#6b7280', maxTicksLimit: 10, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                    y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => (v/1e6).toFixed(0)+'M' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                },
+            },
+        });
+    }
 
-        if (equityChartInstance) equityChartInstance.destroy();
+    function renderPriceChart(pd, trades) {
+        destroyChart('price');
+        if (!pd || !pd.dates || pd.dates.length === 0) return;
+        const ctx = document.getElementById('priceChart').getContext('2d');
 
-        equityChartInstance = new Chart(ctx, {
+        // Build buy/sell points
+        const buyPoints = [], sellPoints = [];
+        (trades || []).forEach(t => {
+            if (t.entry_date) buyPoints.push({ x: t.entry_date, y: t.entry_price });
+            if (t.exit_date) sellPoints.push({ x: t.exit_date, y: t.exit_price });
+        });
+
+        charts.price = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: curve.dates,
+                labels: pd.dates,
+                datasets: [
+                    {
+                        label: 'Price',
+                        data: pd.prices,
+                        borderColor: '#94a3b8',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 0,
+                    },
+                    {
+                        label: 'Buy',
+                        data: pd.dates.map(d => {
+                            const bp = buyPoints.find(p => p.x === d);
+                            return bp ? bp.y : null;
+                        }),
+                        borderColor: '#10b981',
+                        backgroundColor: '#10b981',
+                        pointRadius: 6,
+                        pointStyle: 'triangle',
+                        showLine: false,
+                    },
+                    {
+                        label: 'Sell',
+                        data: pd.dates.map(d => {
+                            const sp = sellPoints.find(p => p.x === d);
+                            return sp ? sp.y : null;
+                        }),
+                        borderColor: '#ef4444',
+                        backgroundColor: '#ef4444',
+                        pointRadius: 6,
+                        pointStyle: 'rectRot',
+                        showLine: false,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtRp(c.raw) } } },
+                scales: {
+                    x: { ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                    y: { ticks: { color: '#6b7280', font: { size: 9 }, callback: v => fmtRp(v) }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                },
+            },
+        });
+    }
+
+    function renderDrawdownChart(dd) {
+        destroyChart('drawdown');
+        if (!dd || !dd.dates || dd.dates.length === 0) return;
+        const ctx = document.getElementById('drawdownChart').getContext('2d');
+        charts.drawdown = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dd.dates,
                 datasets: [{
-                    label: 'Equity (Rp)',
-                    data: curve.values,
-                    borderColor: '#6366f1',
-                    backgroundColor: 'rgba(99, 102, 241, 0.08)',
-                    borderWidth: 2,
+                    label: 'Drawdown %',
+                    data: dd.values,
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239,68,68,0.12)',
+                    borderWidth: 1.5,
                     fill: true,
                     tension: 0.3,
                     pointRadius: 0,
-                    pointHitRadius: 10,
                 }],
             },
             options: {
                 responsive: true,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => formatRupiah(ctx.raw),
-                        }
-                    }
-                },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.raw.toFixed(2) + '%' } } },
                 scales: {
-                    x: {
-                        ticks: { color: '#6b7280', maxTicksLimit: 12, font: { size: 10 } },
-                        grid: { color: 'rgba(255,255,255,0.03)' },
-                    },
-                    y: {
-                        ticks: {
-                            color: '#6b7280',
-                            font: { size: 10 },
-                            callback: v => (v / 1e6).toFixed(0) + 'M',
-                        },
-                        grid: { color: 'rgba(255,255,255,0.03)' },
-                    },
+                    x: { ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                    y: { ticks: { color: '#ef4444', font: { size: 9 }, callback: v => v.toFixed(0) + '%' }, grid: { color: 'rgba(255,255,255,0.03)' } },
                 },
             },
         });
@@ -602,19 +724,16 @@
             return `<tr>
                 <td>${i + 1}</td>
                 <td>${t.entry_date}</td>
-                <td>${formatRupiah(t.entry_price)}</td>
+                <td>${fmtRp(t.entry_price)}</td>
                 <td>${t.exit_date}</td>
-                <td>${formatRupiah(t.exit_price)}</td>
+                <td>${fmtRp(t.exit_price)}</td>
                 <td>${Math.round(t.size)}</td>
-                <td style="${cls}font-weight:700;">${formatRupiah(t.pnl)}</td>
+                <td style="${cls}font-weight:700;">${fmtRp(t.pnl)}</td>
                 <td style="${cls}font-weight:700;">${t.return_pct >= 0 ? '+' : ''}${t.return_pct}%</td>
             </tr>`;
         }).join('');
     }
 
-    // Enter key to run
-    document.getElementById('btTicker').addEventListener('keydown', e => {
-        if (e.key === 'Enter') runBacktest();
-    });
+    document.getElementById('btTicker').addEventListener('keydown', e => { if (e.key === 'Enter') runBacktest(); });
 </script>
 {% endblock %}
