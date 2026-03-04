@@ -2,6 +2,13 @@
 Financial Data Scraper Module
 Fetches financial data from Yahoo Finance with WSJ Markets as fallback.
 Calculates key financial metrics and Piotroski F-Score.
+
+Note: Scoring functions have been extracted to sub-modules for modularity:
+- scrapers/scoring/utils.py      — Utility functions, sector detection, metrics info
+- scrapers/scoring/piotroski.py  — Standard Piotroski F-Score
+- scrapers/scoring/sector_scores.py — Bank, insurance, leasing, securities scoring + valuation
+These functions are still defined in this file for backward compatibility.
+New code should import from scrapers.scoring instead.
 """
 
 import copy

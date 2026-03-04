@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Finance Screener{% endblock %}</title>
+    <meta name="description" content="{% block description %}Financial data screener and analysis dashboard.{% endblock %}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    {% block head_styles %}{% endblock %}
+</head>
+<body>
+
+<div class="container">
+    <!-- Nav -->
+    <nav class="nav">
+        <a href="/" class="nav__brand">📊 Finance Scraper</a>
+        <div class="nav__links">
+            <a href="/" class="nav__link {% if active_page == 'dashboard' %}nav__link--active{% else %}nav__link--default{% endif %}">Dashboard</a>
+            <a href="/screening" class="nav__link {% if active_page == 'screening' %}nav__link--active{% else %}nav__link--default{% endif %}">Screening</a>
+            <a href="/technical-screening" class="nav__link {% if active_page == 'technical' %}nav__link--active{% else %}nav__link--default{% endif %}">Teknikal</a>
+            <a href="/simple-screening" class="nav__link {% if active_page == 'simple' %}nav__link--active{% else %}nav__link--default{% endif %}">RSI & MACD</a>
+            <a href="/avg-price" class="nav__link {% if active_page == 'avg-price' %}nav__link--active{% else %}nav__link--default{% endif %}">Rata-Rata Harga</a>
+            <a href="/ownership" class="nav__link {% if active_page == 'ownership' %}nav__link--active{% else %}nav__link--default{% endif %}">Ownership</a>
+        </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <!-- Footer -->
+    <footer class="footer">
+        {% block footer %}
+        <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a>. Data may be delayed.</p>
+        <p style="margin-top: 6px;">© 2026 Finance Screener. Built with ❤️ for investors.</p>
+        {% endblock %}
+    </footer>
+</div>
+
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

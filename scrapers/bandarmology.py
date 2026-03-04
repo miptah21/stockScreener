@@ -41,18 +41,32 @@ def get_broker_summary(ticker, start_date, end_date=None):
     fetching_active = True
     has_data = False
     
+    skipped_dates = []
+    rate_limited = False
+
     while current_dt <= end_dt:
         date_str = current_dt.strftime("%Y-%m-%d")
         logger.debug("Fetching broker data for %s on %s", ticker, date_str)
         
-        # Try fetching for this date
-        # Assuming the endpoint is the one we found before
-        # We'll use a helper to try endpoints
-        daily_res = _fetch_single_day(ticker, date_str)
+        try:
+            daily_res = _fetch_single_day(ticker, date_str)
+        except Exception as e:
+            logger.warning("Exception fetching %s on %s: %s", ticker, date_str, e)
+            skipped_dates.append(date_str)
+            current_dt += timedelta(days=1)
+            continue
         
         if isinstance(daily_res, dict) and 'error' in daily_res:
-            logger.warning("Error fetching %s: %s", date_str, daily_res['error'])
-            return daily_res
+            err_msg = daily_res.get('error', '')
+            if 'Rate Limit' in str(err_msg):
+                rate_limited = True
+                logger.warning("Rate limited on %s — stopping early", date_str)
+                break
+            # For other errors, skip this date and continue
+            logger.warning("Error fetching %s: %s — skipping date", date_str, err_msg)
+            skipped_dates.append(date_str)
+            current_dt += timedelta(days=1)
+            continue
             
         if daily_res:
             has_data = True
@@ -82,6 +96,10 @@ def get_broker_summary(ticker, start_date, end_date=None):
         current_dt += timedelta(days=1)
         
     if not has_data:
+        if rate_limited:
+            return {'error': 'Rate limit tercapai. Coba lagi nanti.'}
+        if skipped_dates:
+            return {'error': f'Data tidak tersedia untuk tanggal: {", ".join(skipped_dates)}'}
         return None
         
     # Convert aggregation back to list format expected by calculator

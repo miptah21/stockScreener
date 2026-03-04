@@ -8,9 +8,8 @@ import logging
 from screeners.report_screener import get_stock_lists as _get_stock_lists
 from screeners.report_screener import screen_stocks as _screen_stocks
 from screeners.technical_screener import run_technical_screen as _run_technical_screen
-from screeners.technical_screener import MARKET_CAP_PRESETS
 from screeners.simple_screener import run_simple_screen as _run_simple_screen
-from screeners.simple_screener import MARKET_CAP_PRESETS as SIMPLE_MCAP_PRESETS
+from utils.constants import MARKET_CAP_PRESETS
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +77,8 @@ def run_simple_screen(list_key=None, custom_tickers=None,
     # Resolve preset into min/max
     min_mc = None
     max_mc = None
-    if market_cap_preset and market_cap_preset in SIMPLE_MCAP_PRESETS:
-        preset = SIMPLE_MCAP_PRESETS[market_cap_preset]
+    if market_cap_preset and market_cap_preset in MARKET_CAP_PRESETS:
+        preset = MARKET_CAP_PRESETS[market_cap_preset]
         min_mc = preset.get('min')
         max_mc = preset.get('max')
 
