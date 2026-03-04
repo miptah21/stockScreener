@@ -533,3 +533,221 @@ def run_optimization(ticker, strategy_type, param_ranges, period='2y',
         logger.exception(f"Optimization error for {ticker}")
         return {'success': False, 'error': str(e)}
 
+
+def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
+                     train_pct=70, initial_capital=100_000_000, fees_pct=0.15):
+    """
+    Walk-Forward Analysis: optimize on training data, validate on test data.
+
+    Args:
+        ticker: Stock ticker
+        strategy_type: 'rsi', 'macd', 'ema_cross', 'bollinger'
+        param_ranges: Dict of param_name -> list of values
+        period: '2y', '3y', '5y' (need enough data for split)
+        train_pct: Percentage of data for training (default 70%)
+        initial_capital: Starting capital
+        fees_pct: Broker fees %
+
+    Returns:
+        dict with in_sample, out_of_sample results, best_params,
+        equity curves for both periods
+    """
+    from itertools import product
+
+    if period not in VALID_PERIODS:
+        return {'success': False, 'error': f'Invalid period. Use: {VALID_PERIODS}'}
+
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        if hist.empty or len(hist) < 100:
+            return {'success': False, 'error': f'Insufficient data for {ticker} (need 100+ days)'}
+
+        closes = hist['Close']
+
+        # Split into train/test
+        split_idx = int(len(closes) * train_pct / 100)
+        train_closes = closes.iloc[:split_idx]
+        test_closes = closes.iloc[split_idx:]
+
+        if len(train_closes) < 50 or len(test_closes) < 20:
+            return {'success': False, 'error': 'Not enough data after split. Use longer period.'}
+
+        fees = fees_pct / 100
+
+        # ── Phase 1: Optimize on training data ──
+        entries_list = []
+        exits_list = []
+        combos = []
+
+        if strategy_type == 'rsi':
+            entry_vals = param_ranges.get('rsi_entry', [30])
+            exit_vals = param_ranges.get('rsi_exit', [70])
+            rsi_period = int(param_ranges.get('rsi_period', [14])[0]) if isinstance(param_ranges.get('rsi_period'), list) else 14
+            rsi = _compute_rsi(train_closes, rsi_period)
+            for ev, xv in product(entry_vals, exit_vals):
+                if ev >= xv:
+                    continue
+                e = ((rsi < ev) & (rsi.shift(1) >= ev)).fillna(False)
+                x = ((rsi > xv) & (rsi.shift(1) <= xv)).fillna(False)
+                entries_list.append(e)
+                exits_list.append(x)
+                combos.append({'rsi_period': rsi_period, 'rsi_entry': ev, 'rsi_exit': xv})
+
+        elif strategy_type == 'macd':
+            fast_vals = param_ranges.get('macd_fast', [12])
+            slow_vals = param_ranges.get('macd_slow', [26])
+            signal_vals = param_ranges.get('macd_signal', [9])
+            for f, s, sig in product(fast_vals, slow_vals, signal_vals):
+                if f >= s:
+                    continue
+                ml, sl, _ = _compute_macd(train_closes, f, s, sig)
+                e = ((ml > sl) & (ml.shift(1) <= sl.shift(1))).fillna(False)
+                x = ((ml < sl) & (ml.shift(1) >= sl.shift(1))).fillna(False)
+                entries_list.append(e)
+                exits_list.append(x)
+                combos.append({'macd_fast': f, 'macd_slow': s, 'macd_signal': sig})
+
+        elif strategy_type == 'ema_cross':
+            short_vals = param_ranges.get('ema_short', [12])
+            long_vals = param_ranges.get('ema_long', [26])
+            for sv, lv in product(short_vals, long_vals):
+                if sv >= lv:
+                    continue
+                es = _compute_ema(train_closes, sv)
+                el = _compute_ema(train_closes, lv)
+                e = ((es > el) & (es.shift(1) <= el.shift(1))).fillna(False)
+                x = ((es < el) & (es.shift(1) >= el.shift(1))).fillna(False)
+                entries_list.append(e)
+                exits_list.append(x)
+                combos.append({'ema_short': sv, 'ema_long': lv})
+
+        elif strategy_type == 'bollinger':
+            period_vals = param_ranges.get('bb_period', [20])
+            std_vals = param_ranges.get('bb_std', [2.0])
+            for p, sd in product(period_vals, std_vals):
+                mid = train_closes.rolling(p).mean()
+                std_s = train_closes.rolling(p).std()
+                lower = mid - sd * std_s
+                upper = mid + sd * std_s
+                e = ((train_closes < lower) & (train_closes.shift(1) >= lower.shift(1))).fillna(False)
+                x = ((train_closes > upper) & (train_closes.shift(1) <= upper.shift(1))).fillna(False)
+                entries_list.append(e)
+                exits_list.append(x)
+                combos.append({'bb_period': p, 'bb_std': sd})
+        else:
+            return {'success': False, 'error': f'Walk-forward not supported for: {strategy_type}'}
+
+        if not combos:
+            return {'success': False, 'error': 'No valid parameter combinations'}
+
+        # Vectorized training simulation
+        all_entries = pd.concat(entries_list, axis=1).astype(bool)
+        all_exits = pd.concat(exits_list, axis=1).astype(bool)
+        pf_train = vbt.Portfolio.from_signals(
+            train_closes, all_entries, all_exits,
+            init_cash=initial_capital, fees=fees, freq='1D'
+        )
+
+        # Find best combo by Sharpe
+        sharpes = pf_train.sharpe_ratio()
+        best_idx = int(sharpes.argmax()) if not sharpes.isna().all() else 0
+        best_combo = combos[best_idx]
+
+        # In-sample metrics
+        in_return = round(_safe_val(float(pf_train.total_return().iloc[best_idx]) * 100), 2)
+        in_sharpe = round(_safe_val(float(sharpes.iloc[best_idx])), 2)
+        in_dd = round(_safe_val(float(pf_train.max_drawdown().iloc[best_idx]) * 100), 2)
+        in_trades = int(_safe_val(float(pf_train.trades.count().iloc[best_idx])))
+
+        # In-sample equity curve
+        in_equity = pf_train.value().iloc[:, best_idx]
+        if len(in_equity) > 300:
+            step = max(1, len(in_equity) // 300)
+            in_eq_s = in_equity.iloc[::step]
+        else:
+            in_eq_s = in_equity
+        in_eq_data = {
+            'dates': [d.strftime('%Y-%m-%d') for d in in_eq_s.index],
+            'values': [round(_safe_val(v), 0) for v in in_eq_s.values],
+        }
+
+        # ── Phase 2: Validate on test data with best params ──
+        test_entries, test_exits = _generate_signals(test_closes, strategy_type, best_combo)
+
+        if not test_entries.any():
+            out_return = 0
+            out_sharpe = 0
+            out_dd = 0
+            out_trades = 0
+            out_eq_data = {
+                'dates': [test_closes.index[0].strftime('%Y-%m-%d'),
+                          test_closes.index[-1].strftime('%Y-%m-%d')],
+                'values': [initial_capital, initial_capital],
+            }
+        else:
+            pf_test = vbt.Portfolio.from_signals(
+                test_closes, test_entries, test_exits,
+                init_cash=initial_capital, fees=fees, freq='1D'
+            )
+            test_stats = pf_test.stats()
+            out_return = round(_safe_val(test_stats.get('Total Return [%]', 0)), 2)
+            out_sharpe = round(_safe_val(test_stats.get('Sharpe Ratio', 0)), 2)
+            out_dd = round(_safe_val(test_stats.get('Max Drawdown [%]', 0)), 2)
+            out_trades = int(_safe_val(test_stats.get('Total Trades', 0)))
+
+            out_equity = pf_test.value()
+            if len(out_equity) > 300:
+                step = max(1, len(out_equity) // 300)
+                out_eq_s = out_equity.iloc[::step]
+            else:
+                out_eq_s = out_equity
+            out_eq_data = {
+                'dates': [d.strftime('%Y-%m-%d') for d in out_eq_s.index],
+                'values': [round(_safe_val(v), 0) for v in out_eq_s.values],
+            }
+
+        # Robustness score: how well does out-of-sample track in-sample?
+        if in_sharpe > 0 and out_sharpe > 0:
+            robustness = round(min(out_sharpe / max(in_sharpe, 0.01), 2.0) * 100, 0)
+        elif out_sharpe >= 0:
+            robustness = 50
+        else:
+            robustness = 0
+
+        return {
+            'success': True,
+            'best_params': best_combo,
+            'total_combos': len(combos),
+            'train_period': {
+                'start': train_closes.index[0].strftime('%Y-%m-%d'),
+                'end': train_closes.index[-1].strftime('%Y-%m-%d'),
+                'days': len(train_closes),
+            },
+            'test_period': {
+                'start': test_closes.index[0].strftime('%Y-%m-%d'),
+                'end': test_closes.index[-1].strftime('%Y-%m-%d'),
+                'days': len(test_closes),
+            },
+            'in_sample': {
+                'total_return_pct': in_return,
+                'sharpe_ratio': in_sharpe,
+                'max_drawdown_pct': round(-abs(in_dd), 2),
+                'total_trades': in_trades,
+            },
+            'out_of_sample': {
+                'total_return_pct': out_return,
+                'sharpe_ratio': out_sharpe,
+                'max_drawdown_pct': round(-abs(out_dd), 2),
+                'total_trades': out_trades,
+            },
+            'in_sample_equity': in_eq_data,
+            'out_of_sample_equity': out_eq_data,
+            'robustness_score': robustness,
+        }
+
+    except Exception as e:
+        logger.exception(f"Walk-forward error for {ticker}")
+        return {'success': False, 'error': str(e)}
+
+

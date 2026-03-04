@@ -278,6 +278,54 @@
     .bt-opt-table tr:first-child td { background: rgba(99,102,241,0.08); font-weight: 700; color: var(--accent-purple); }
     .bt-opt-best { background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3); border-radius: 12px; padding: 14px; margin-top: 14px; }
     .bt-opt-best__title { font-size: 12px; font-weight: 700; color: var(--accent-purple); margin-bottom: 8px; }
+
+    /* Walk-Forward */
+    .bt-wf-btn {
+        width: 100%;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(245,158,11,0.3);
+        background: rgba(245,158,11,0.08);
+        color: #f59e0b;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-top: 8px;
+    }
+    .bt-wf-btn:hover { background: rgba(245,158,11,0.15); }
+    .bt-wf-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .bt-wf-results { display: none; }
+    .bt-wf-compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    @media (max-width: 700px) { .bt-wf-compare { grid-template-columns: 1fr; } }
+    .bt-wf-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        padding: 16px;
+        backdrop-filter: blur(20px);
+    }
+    .bt-wf-card__title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+    .bt-wf-card--train .bt-wf-card__title { color: #6366f1; }
+    .bt-wf-card--test .bt-wf-card__title { color: #f59e0b; }
+    .bt-wf-stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }
+    .bt-wf-stat__label { color: var(--text-muted); }
+    .bt-wf-stat__val { font-weight: 700; }
+    .bt-robustness {
+        text-align: center;
+        padding: 20px;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        margin-bottom: 20px;
+    }
+    .bt-robustness__score { font-size: 3rem; font-weight: 800; }
+    .bt-robustness__label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
 </style>
 {% endblock %}
 
@@ -454,6 +502,10 @@
                     🔍 Optimasi Parameter
                 </button>
                 <div class="bt-field__hint" style="text-align:center;margin-top:6px;">Grid search otomatis untuk parameter terbaik</div>
+                <button class="bt-wf-btn" id="btWfBtn" onclick="runWalkForward()" style="margin-top:10px;">
+                    🔀 Walk-Forward Analysis
+                </button>
+                <div class="bt-field__hint" style="text-align:center;margin-top:6px;">Train/test split validasi out-of-sample</div>
             </div>
         </div>
 
@@ -531,6 +583,21 @@
                         <div id="btOptBest" class="bt-opt-best" style="display:none;"></div>
                         <div style="overflow-x:auto;">
                             <table class="bt-opt-table" id="btOptTable"></table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Walk-Forward Results -->
+                <div id="btWfResults" class="bt-wf-results">
+                    <div class="bt-chart-card">
+                        <div class="bt-chart-card__title">🔀 Walk-Forward Analysis</div>
+                        <div id="btWfBestParams" class="bt-opt-best" style="display:none;"></div>
+                        <div id="btRobustness" class="bt-robustness" style="display:none;"></div>
+                        <div class="bt-wf-compare" id="btWfCompare"></div>
+                        <canvas id="wfEquityChart" height="220"></canvas>
+                        <div class="bt-chart-card__legend" style="margin-top:8px;">
+                            <span style="color:#6366f1;">● In-Sample (Train)</span>
+                            <span style="color:#f59e0b;">● Out-of-Sample (Test)</span>
                         </div>
                     </div>
                 </div>
@@ -942,6 +1009,135 @@
         });
         html += '</tbody>';
         table.innerHTML = html;
+    }
+
+    // Walk-Forward Analysis
+    async function runWalkForward() {
+        const ticker = document.getElementById('btTicker').value.trim().toUpperCase();
+        if (!ticker) return alert('Masukkan ticker');
+        const ranges = getOptParamRanges();
+        if (!ranges) return alert('Walk-forward tidak tersedia untuk strategi Combined');
+
+        const btn = document.getElementById('btWfBtn');
+        const loadingEl = document.getElementById('btLoading');
+        const errorEl = document.getElementById('btError');
+        const wfResults = document.getElementById('btWfResults');
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Analyzing...';
+        loadingEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        wfResults.style.display = 'none';
+
+        try {
+            const r = await fetch('/api/backtest/walk-forward', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ticker,
+                    strategy_type: currentStrategy,
+                    param_ranges: ranges,
+                    period: document.getElementById('btPeriod').value,
+                    train_pct: 70,
+                    initial_capital: +document.getElementById('btCapital').value,
+                    fees_pct: +document.getElementById('btFees').value,
+                }),
+            });
+            const data = await r.json();
+            loadingEl.style.display = 'none';
+
+            if (!data.success) {
+                errorEl.textContent = '❌ ' + (data.error || 'Unknown error');
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            wfResults.style.display = 'block';
+            renderWfResults(data);
+
+        } catch (err) {
+            loadingEl.style.display = 'none';
+            errorEl.textContent = '❌ ' + err.message;
+            errorEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔀 Walk-Forward Analysis';
+        }
+    }
+
+    function renderWfResults(data) {
+        // Best params
+        const bpDiv = document.getElementById('btWfBestParams');
+        const bp = data.best_params;
+        const paramStr = Object.entries(bp).map(([k,v]) => `<strong>${k}:</strong> ${v}`).join(' &nbsp;|&nbsp; ');
+        bpDiv.innerHTML = `<div class="bt-opt-best__title">🏆 Best Parameters Found (${data.total_combos} tested)</div>
+            <div style="font-size:13px;color:var(--text-primary);">${paramStr}</div>`;
+        bpDiv.style.display = 'block';
+
+        // Robustness
+        const robDiv = document.getElementById('btRobustness');
+        const score = data.robustness_score;
+        const color = score >= 80 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444';
+        const label = score >= 80 ? 'ROBUST ✅' : score >= 50 ? 'MODERATE ⚠️' : 'OVERFITTED ❌';
+        robDiv.innerHTML = `<div class="bt-robustness__score" style="color:${color};">${score}%</div>
+            <div class="bt-robustness__label">Robustness Score — ${label}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                Train: ${data.train_period.start} → ${data.train_period.end} (${data.train_period.days}d)
+                &nbsp;|&nbsp; Test: ${data.test_period.start} → ${data.test_period.end} (${data.test_period.days}d)
+            </div>`;
+        robDiv.style.display = 'block';
+
+        // Compare cards
+        const is = data.in_sample;
+        const os = data.out_of_sample;
+        document.getElementById('btWfCompare').innerHTML = `
+            <div class="bt-wf-card bt-wf-card--train">
+                <div class="bt-wf-card__title">📘 In-Sample (Training)</div>
+                <div class="bt-wf-stat"><span class="bt-wf-stat__label">Return</span><span class="bt-wf-stat__val" style="color:${is.total_return_pct>=0?'#10b981':'#ef4444'};">${is.total_return_pct}%</span></div>
+                <div class="bt-wf-stat"><span class="bt-wf-stat__label">Sharpe</span><span class="bt-wf-stat__val">${is.sharpe_ratio}</span></div>
+                <div class="bt-wf-stat"><span class="bt-wf-stat__label">Max DD</span><span class="bt-wf-stat__val" style="color:#ef4444;">${is.max_drawdown_pct}%</span></div>
+                <div class="bt-wf-stat"><span class="bt-wf-stat__label">Trades</span><span class="bt-wf-stat__val">${is.total_trades}</span></div>
+            </div>
+            <div class="bt-wf-card bt-wf-card--test">
+                <div class="bt-wf-card__title">📙 Out-of-Sample (Test)</div>
+                <div class="bt-wf-stat"><span class="bt-wf-stat__label">Return</span><span class="bt-wf-stat__val" style="color:${os.total_return_pct>=0?'#10b981':'#ef4444'};">${os.total_return_pct}%</span></div>
+                <div class="bt-wf-stat"><span class="bt-wf-stat__label">Sharpe</span><span class="bt-wf-stat__val">${os.sharpe_ratio}</span></div>
+                <div class="bt-wf-stat"><span class="bt-wf-stat__label">Max DD</span><span class="bt-wf-stat__val" style="color:#ef4444;">${os.max_drawdown_pct}%</span></div>
+                <div class="bt-wf-stat"><span class="bt-wf-stat__label">Trades</span><span class="bt-wf-stat__val">${os.total_trades}</span></div>
+            </div>`;
+
+        // Equity chart
+        destroyChart('wfEquity');
+        const ctx = document.getElementById('wfEquityChart').getContext('2d');
+        charts.wfEquity = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'In-Sample',
+                        data: data.in_sample_equity.dates.map((d, i) => ({ x: d, y: data.in_sample_equity.values[i] })),
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99,102,241,0.08)',
+                        borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0,
+                    },
+                    {
+                        label: 'Out-of-Sample',
+                        data: data.out_of_sample_equity.dates.map((d, i) => ({ x: d, y: data.out_of_sample_equity.values[i] })),
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245,158,11,0.08)',
+                        borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtRp(c.raw.y) } } },
+                scales: {
+                    x: { type: 'category', labels: [...data.in_sample_equity.dates, ...data.out_of_sample_equity.dates], ticks: { color: '#6b7280', maxTicksLimit: 10, font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                    y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => (v/1e6).toFixed(0)+'M' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                },
+            },
+        });
     }
 
     document.getElementById('btTicker').addEventListener('keydown', e => { if (e.key === 'Enter') runBacktest(); });
