@@ -14,7 +14,7 @@ from flask import Blueprint, jsonify, request
 from services.scraping_service import get_financials
 from services.screening_service import get_stock_lists, screen_stocks
 from services.market_service import get_market_overview
-from services.backtest_service import run_backtest
+from services.backtest_service import run_backtest, run_optimization
 from scrapers.bandarmology import get_broker_summary, calculate_bandar_flow
 
 logger = logging.getLogger(__name__)
@@ -493,4 +493,48 @@ def api_backtest():
         return jsonify(result)
     except Exception as e:
         logger.exception("Backtest API error")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_data_bp.route('/api/backtest/optimize', methods=['POST'])
+def api_backtest_optimize():
+    """
+    Run grid search optimization for a strategy.
+
+    POST JSON body:
+        ticker (str): Stock ticker
+        strategy_type (str): 'rsi', 'macd', 'ema_cross', 'bollinger'
+        param_ranges (dict): Param name -> list of values
+        period (str): '1y', '2y', '3y', '5y'
+    """
+    data = request.get_json(silent=True) or {}
+
+    ticker = data.get('ticker', '').strip()
+    if not ticker:
+        return jsonify({'success': False, 'error': 'Missing ticker'}), 400
+
+    clean = _validate_ticker(ticker)
+    if not clean:
+        return jsonify({'success': False, 'error': 'Invalid ticker format'}), 400
+    if not clean.endswith('.JK'):
+        clean = clean + '.JK'
+
+    strategy_type = data.get('strategy_type', 'rsi')
+    param_ranges = data.get('param_ranges', {})
+    period = data.get('period', '2y')
+    initial_capital = int(data.get('initial_capital', 100_000_000))
+    fees_pct = float(data.get('fees_pct', 0.15))
+
+    try:
+        result = run_optimization(
+            ticker=clean,
+            strategy_type=strategy_type,
+            param_ranges=param_ranges,
+            period=period,
+            initial_capital=initial_capital,
+            fees_pct=fees_pct,
+        )
+        return jsonify(result)
+    except Exception as e:
+        logger.exception("Optimization API error")
         return jsonify({'success': False, 'error': str(e)}), 500

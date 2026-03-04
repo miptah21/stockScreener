@@ -125,6 +125,20 @@ def _generate_signals(closes, strategy_type, params):
         # Exit: either RSI overbought or MACD bearish cross
         exits = rsi_sell | macd_sell
 
+    elif strategy_type == 'bollinger':
+        bb_period = int(params.get('bb_period', 20))
+        bb_std = float(params.get('bb_std', 2.0))
+
+        middle = closes.rolling(bb_period).mean()
+        std = closes.rolling(bb_period).std()
+        upper = middle + bb_std * std
+        lower = middle - bb_std * std
+
+        # Buy when price crosses below lower band
+        entries = (closes < lower) & (closes.shift(1) >= lower.shift(1))
+        # Sell when price crosses above upper band
+        exits = (closes > upper) & (closes.shift(1) <= upper.shift(1))
+
     # Fill NaN with False
     entries = entries.fillna(False).astype(bool)
     exits = exits.fillna(False).astype(bool)
@@ -189,8 +203,9 @@ def run_backtest(ticker, strategy_type, params, period='2y',
     if period not in VALID_PERIODS:
         return {'success': False, 'error': f'Invalid period. Use: {VALID_PERIODS}'}
 
-    if strategy_type not in ('rsi', 'macd', 'ema_cross', 'combined'):
-        return {'success': False, 'error': 'Invalid strategy_type'}
+    valid_strategies = ('rsi', 'macd', 'ema_cross', 'combined', 'bollinger')
+    if strategy_type not in valid_strategies:
+        return {'success': False, 'error': f'Invalid strategy_type. Use: {valid_strategies}'}
 
     try:
         # 1. Fetch historical data
@@ -348,10 +363,173 @@ def run_backtest(ticker, strategy_type, params, period='2y',
                 'prices': price_values,
             },
             'benchmark_curve': benchmark_data,
+            'monthly_returns': _compute_monthly_returns(portfolio),
             'trades': trade_log,
         }
 
     except Exception as e:
         logger.exception(f"Backtest error for {ticker}")
+        return {'success': False, 'error': str(e)}
+
+
+def _compute_monthly_returns(portfolio):
+    """Compute monthly return matrix {year: {month: return%}}."""
+    try:
+        equity = portfolio.value()
+        monthly = equity.resample('ME').last()
+        monthly_ret = monthly.pct_change() * 100
+
+        result = {}
+        for date, ret in monthly_ret.items():
+            year = str(date.year)
+            month = date.month
+            if year not in result:
+                result[year] = {}
+            result[year][str(month)] = round(_safe_val(ret), 2)
+        return result
+    except Exception:
+        return {}
+
+
+def run_optimization(ticker, strategy_type, param_ranges, period='2y',
+                     initial_capital=100_000_000, fees_pct=0.15):
+    """
+    Run grid search optimization across parameter ranges.
+    Uses VectorBT's vectorized multi-column simulation.
+
+    Args:
+        ticker: Stock ticker (e.g., 'BBCA.JK')
+        strategy_type: 'rsi', 'macd', 'ema_cross', 'bollinger'
+        param_ranges: Dict of param_name -> list of values
+        period: '1y', '2y', '3y', '5y'
+        initial_capital: Starting capital
+        fees_pct: Broker fees %
+
+    Returns:
+        dict with success, results (sorted by Sharpe), best_params
+    """
+    from itertools import product
+
+    if period not in VALID_PERIODS:
+        return {'success': False, 'error': f'Invalid period. Use: {VALID_PERIODS}'}
+
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        if hist.empty or len(hist) < 50:
+            return {'success': False, 'error': f'Insufficient data for {ticker}'}
+
+        closes = hist['Close']
+        fees = fees_pct / 100
+
+        # Build all param combinations and generate signals
+        entries_list = []
+        exits_list = []
+        combos = []
+
+        if strategy_type == 'rsi':
+            entry_vals = param_ranges.get('rsi_entry', [30])
+            exit_vals = param_ranges.get('rsi_exit', [70])
+            rsi_period = int(param_ranges.get('rsi_period', [14])[0]) if isinstance(param_ranges.get('rsi_period'), list) else 14
+            rsi = _compute_rsi(closes, rsi_period)
+
+            for ev, xv in product(entry_vals, exit_vals):
+                if ev >= xv:
+                    continue  # skip invalid: entry must be < exit
+                e = ((rsi < ev) & (rsi.shift(1) >= ev)).fillna(False)
+                x = ((rsi > xv) & (rsi.shift(1) <= xv)).fillna(False)
+                entries_list.append(e)
+                exits_list.append(x)
+                combos.append({'rsi_entry': ev, 'rsi_exit': xv})
+
+        elif strategy_type == 'macd':
+            fast_vals = param_ranges.get('macd_fast', [12])
+            slow_vals = param_ranges.get('macd_slow', [26])
+            signal_vals = param_ranges.get('macd_signal', [9])
+
+            for f, s, sig in product(fast_vals, slow_vals, signal_vals):
+                if f >= s:
+                    continue
+                ml, sl, _ = _compute_macd(closes, f, s, sig)
+                e = ((ml > sl) & (ml.shift(1) <= sl.shift(1))).fillna(False)
+                x = ((ml < sl) & (ml.shift(1) >= sl.shift(1))).fillna(False)
+                entries_list.append(e)
+                exits_list.append(x)
+                combos.append({'macd_fast': f, 'macd_slow': s, 'macd_signal': sig})
+
+        elif strategy_type == 'ema_cross':
+            short_vals = param_ranges.get('ema_short', [12])
+            long_vals = param_ranges.get('ema_long', [26])
+
+            for sv, lv in product(short_vals, long_vals):
+                if sv >= lv:
+                    continue
+                es = _compute_ema(closes, sv)
+                el = _compute_ema(closes, lv)
+                e = ((es > el) & (es.shift(1) <= el.shift(1))).fillna(False)
+                x = ((es < el) & (es.shift(1) >= el.shift(1))).fillna(False)
+                entries_list.append(e)
+                exits_list.append(x)
+                combos.append({'ema_short': sv, 'ema_long': lv})
+
+        elif strategy_type == 'bollinger':
+            period_vals = param_ranges.get('bb_period', [20])
+            std_vals = param_ranges.get('bb_std', [2.0])
+
+            for p, sd in product(period_vals, std_vals):
+                mid = closes.rolling(p).mean()
+                std = closes.rolling(p).std()
+                lower = mid - sd * std
+                upper = mid + sd * std
+                e = ((closes < lower) & (closes.shift(1) >= lower.shift(1))).fillna(False)
+                x = ((closes > upper) & (closes.shift(1) <= upper.shift(1))).fillna(False)
+                entries_list.append(e)
+                exits_list.append(x)
+                combos.append({'bb_period': p, 'bb_std': sd})
+        else:
+            return {'success': False, 'error': f'Optimization not supported for: {strategy_type}'}
+
+        if not combos:
+            return {'success': False, 'error': 'No valid parameter combinations generated'}
+
+        # Stack as DataFrame columns for vectorized simulation
+        all_entries = pd.concat(entries_list, axis=1).astype(bool)
+        all_exits = pd.concat(exits_list, axis=1).astype(bool)
+
+        pf = vbt.Portfolio.from_signals(
+            closes, all_entries, all_exits,
+            init_cash=initial_capital, fees=fees, freq='1D'
+        )
+
+        # Extract metrics per combo
+        total_returns = pf.total_return()
+        sharpe_ratios = pf.sharpe_ratio()
+        max_drawdowns = pf.max_drawdown()
+        trade_counts = pf.trades.count()
+
+        results = []
+        for i, combo in enumerate(combos):
+            results.append({
+                **combo,
+                'total_return_pct': round(_safe_val(float(total_returns.iloc[i]) * 100), 2),
+                'sharpe_ratio': round(_safe_val(float(sharpe_ratios.iloc[i])), 2),
+                'max_drawdown_pct': round(_safe_val(float(max_drawdowns.iloc[i]) * 100), 2),
+                'total_trades': int(_safe_val(float(trade_counts.iloc[i]))),
+            })
+
+        # Sort by Sharpe ratio descending
+        results.sort(key=lambda x: x['sharpe_ratio'], reverse=True)
+
+        best = results[0] if results else {}
+
+        return {
+            'success': True,
+            'results': results,
+            'total_combos': len(results),
+            'best_params': best,
+        }
+
+    except Exception as e:
+        logger.exception(f"Optimization error for {ticker}")
         return {'success': False, 'error': str(e)}
 

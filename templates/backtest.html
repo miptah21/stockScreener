@@ -244,6 +244,40 @@
     /* Chart grid */
     .bt-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
     @media (max-width: 900px) { .bt-charts-grid { grid-template-columns: 1fr; } }
+
+    /* Monthly Returns Heatmap */
+    .bt-heatmap { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .bt-heatmap th { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; padding: 6px; text-align: center; }
+    .bt-heatmap td { padding: 8px 4px; text-align: center; border-radius: 6px; font-weight: 700; font-size: 11px; }
+    .bt-heatmap td.hm-pos { background: rgba(16,185,129,0.15); color: #10b981; }
+    .bt-heatmap td.hm-neg { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .bt-heatmap td.hm-zero { color: var(--text-muted); }
+    .bt-heatmap td.hm-strong-pos { background: rgba(16,185,129,0.3); color: #10b981; }
+    .bt-heatmap td.hm-strong-neg { background: rgba(239,68,68,0.3); color: #ef4444; }
+
+    /* Optimization */
+    .bt-opt-panel { margin-top: 16px; }
+    .bt-opt-btn {
+        width: 100%;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(34,211,238,0.3);
+        background: rgba(34,211,238,0.08);
+        color: var(--accent-cyan);
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .bt-opt-btn:hover { background: rgba(34,211,238,0.15); }
+    .bt-opt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .bt-opt-results { display: none; }
+    .bt-opt-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+    .bt-opt-table th { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); text-align: left; }
+    .bt-opt-table td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text-secondary); }
+    .bt-opt-table tr:first-child td { background: rgba(99,102,241,0.08); font-weight: 700; color: var(--accent-purple); }
+    .bt-opt-best { background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3); border-radius: 12px; padding: 14px; margin-top: 14px; }
+    .bt-opt-best__title { font-size: 12px; font-weight: 700; color: var(--accent-purple); margin-bottom: 8px; }
 </style>
 {% endblock %}
 
@@ -280,6 +314,7 @@
                     <button class="bt-tab bt-tab--active" onclick="selectStrategy('rsi')">RSI</button>
                     <button class="bt-tab" onclick="selectStrategy('macd')">MACD</button>
                     <button class="bt-tab" onclick="selectStrategy('ema_cross')">EMA Cross</button>
+                    <button class="bt-tab" onclick="selectStrategy('bollinger')">Bollinger</button>
                     <button class="bt-tab" onclick="selectStrategy('combined')">Combined</button>
                 </div>
             </div>
@@ -366,6 +401,20 @@
                 </div>
             </div>
 
+            <!-- Bollinger Params -->
+            <div id="params_bollinger" class="bt-params">
+                <div class="bt-field__row">
+                    <div class="bt-field">
+                        <label class="bt-field__label">BB Period</label>
+                        <input type="number" class="bt-field__input" id="bb_period" value="20" min="5" max="50">
+                    </div>
+                    <div class="bt-field">
+                        <label class="bt-field__label">Std Dev</label>
+                        <input type="number" class="bt-field__input" id="bb_std" value="2.0" min="0.5" max="4" step="0.1">
+                    </div>
+                </div>
+            </div>
+
             <hr class="bt-sep">
 
             <!-- Risk Management -->
@@ -398,6 +447,14 @@
             <button class="bt-run-btn" id="btRunBtn" onclick="runBacktest()">
                 ▶ Jalankan Backtest
             </button>
+
+            <div class="bt-opt-panel">
+                <hr class="bt-sep">
+                <button class="bt-opt-btn" id="btOptBtn" onclick="runOptimization()">
+                    🔍 Optimasi Parameter
+                </button>
+                <div class="bt-field__hint" style="text-align:center;margin-top:6px;">Grid search otomatis untuk parameter terbaik</div>
+            </div>
         </div>
 
         <!-- Right: Results -->
@@ -439,6 +496,12 @@
                     </div>
                 </div>
 
+                <!-- Monthly Returns Heatmap -->
+                <div class="bt-chart-card" id="btHeatmapCard" style="display:none;">
+                    <div class="bt-chart-card__title">📅 Monthly Returns (%)</div>
+                    <div style="overflow-x:auto;" id="btHeatmapContainer"></div>
+                </div>
+
                 <!-- Trade Log -->
                 <div class="bt-trades-card">
                     <div class="bt-chart-card__title">📋 Trade Log</div>
@@ -458,6 +521,17 @@
                             </thead>
                             <tbody id="btTradesBody"></tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- Optimization Results -->
+                <div id="btOptResults" class="bt-opt-results">
+                    <div class="bt-chart-card">
+                        <div class="bt-chart-card__title">🔍 Optimization Results</div>
+                        <div id="btOptBest" class="bt-opt-best" style="display:none;"></div>
+                        <div style="overflow-x:auto;">
+                            <table class="bt-opt-table" id="btOptTable"></table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -486,6 +560,8 @@
             return { macd_fast: +document.getElementById('macd_fast').value, macd_slow: +document.getElementById('macd_slow').value, macd_signal: +document.getElementById('macd_signal').value };
         } else if (currentStrategy === 'ema_cross') {
             return { ema_short: +document.getElementById('ema_short').value, ema_long: +document.getElementById('ema_long').value };
+        } else if (currentStrategy === 'bollinger') {
+            return { bb_period: +document.getElementById('bb_period').value, bb_std: +document.getElementById('bb_std').value };
         } else {
             return { rsi_period: +document.getElementById('c_rsi_period').value, rsi_entry: +document.getElementById('c_rsi_entry').value, rsi_exit: +document.getElementById('c_rsi_exit').value, macd_fast: +document.getElementById('c_macd_fast').value, macd_slow: +document.getElementById('c_macd_slow').value, macd_signal: +document.getElementById('c_macd_signal').value };
         }
@@ -547,6 +623,7 @@
             renderEquityCurve(data.equity_curve, data.benchmark_curve);
             renderPriceChart(data.price_data, data.trades || []);
             renderDrawdownChart(data.drawdown_curve);
+            renderMonthlyHeatmap(data.monthly_returns || {});
             renderTradeLog(data.trades || []);
 
         } catch (err) {
@@ -732,6 +809,139 @@
                 <td style="${cls}font-weight:700;">${t.return_pct >= 0 ? '+' : ''}${t.return_pct}%</td>
             </tr>`;
         }).join('');
+    }
+
+    function renderMonthlyHeatmap(mr) {
+        const card = document.getElementById('btHeatmapCard');
+        const container = document.getElementById('btHeatmapContainer');
+        const years = Object.keys(mr).sort();
+        if (!years.length) { card.style.display = 'none'; return; }
+        card.style.display = 'block';
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        let html = '<table class="bt-heatmap"><thead><tr><th>Year</th>';
+        months.forEach(m => html += `<th>${m}</th>`);
+        html += '<th>Total</th></tr></thead><tbody>';
+        years.forEach(y => {
+            html += `<tr><td style="font-weight:700;color:var(--text-primary);">${y}</td>`;
+            let total = 0;
+            for (let m = 1; m <= 12; m++) {
+                const v = mr[y]?.[String(m)];
+                if (v != null) {
+                    total += v;
+                    const cls = v > 5 ? 'hm-strong-pos' : v > 0 ? 'hm-pos' : v < -5 ? 'hm-strong-neg' : v < 0 ? 'hm-neg' : 'hm-zero';
+                    html += `<td class="${cls}">${v > 0 ? '+' : ''}${v.toFixed(1)}</td>`;
+                } else {
+                    html += '<td class="hm-zero">—</td>';
+                }
+            }
+            const tcls = total > 0 ? 'hm-pos' : total < 0 ? 'hm-neg' : 'hm-zero';
+            html += `<td class="${tcls}" style="font-weight:800;">${total > 0 ? '+' : ''}${total.toFixed(1)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    }
+
+    // Optimization
+    function getOptParamRanges() {
+        if (currentStrategy === 'rsi') {
+            return { rsi_entry: [20, 25, 30, 35, 40], rsi_exit: [60, 65, 70, 75, 80] };
+        } else if (currentStrategy === 'macd') {
+            return { macd_fast: [8, 10, 12, 14], macd_slow: [22, 26, 30], macd_signal: [7, 9, 11] };
+        } else if (currentStrategy === 'ema_cross') {
+            return { ema_short: [5, 8, 12, 15, 20], ema_long: [20, 26, 30, 40, 50] };
+        } else if (currentStrategy === 'bollinger') {
+            return { bb_period: [10, 15, 20, 25, 30], bb_std: [1.5, 2.0, 2.5, 3.0] };
+        } else {
+            return null;
+        }
+    }
+
+    async function runOptimization() {
+        const ticker = document.getElementById('btTicker').value.trim().toUpperCase();
+        if (!ticker) return alert('Masukkan ticker');
+        const ranges = getOptParamRanges();
+        if (!ranges) return alert('Optimasi tidak tersedia untuk strategi Combined');
+
+        const btn = document.getElementById('btOptBtn');
+        const loadingEl = document.getElementById('btLoading');
+        const errorEl = document.getElementById('btError');
+        const optResults = document.getElementById('btOptResults');
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Optimizing...';
+        loadingEl.style.display = 'block';
+        errorEl.style.display = 'none';
+        optResults.style.display = 'none';
+
+        try {
+            const r = await fetch('/api/backtest/optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ticker,
+                    strategy_type: currentStrategy,
+                    param_ranges: ranges,
+                    period: document.getElementById('btPeriod').value,
+                    initial_capital: +document.getElementById('btCapital').value,
+                    fees_pct: +document.getElementById('btFees').value,
+                }),
+            });
+            const data = await r.json();
+            loadingEl.style.display = 'none';
+
+            if (!data.success) {
+                errorEl.textContent = '❌ ' + (data.error || 'Unknown error');
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            optResults.style.display = 'block';
+            renderOptResults(data);
+
+        } catch (err) {
+            loadingEl.style.display = 'none';
+            errorEl.textContent = '❌ ' + err.message;
+            errorEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔍 Optimasi Parameter';
+        }
+    }
+
+    function renderOptResults(data) {
+        const bestDiv = document.getElementById('btOptBest');
+        const table = document.getElementById('btOptTable');
+        const best = data.best_params;
+        const results = data.results;
+
+        // Best params
+        if (best) {
+            const params = Object.entries(best).filter(([k]) => !['total_return_pct','sharpe_ratio','max_drawdown_pct','total_trades'].includes(k));
+            bestDiv.innerHTML = `<div class="bt-opt-best__title">🏆 Best Parameters (${data.total_combos} combinations tested)</div>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--text-primary);">
+                    ${params.map(([k,v]) => `<span><strong>${k}:</strong> ${v}</span>`).join('')}
+                    <span>Return: <strong style="color:${best.total_return_pct >= 0 ? '#10b981' : '#ef4444'};">${best.total_return_pct}%</strong></span>
+                    <span>Sharpe: <strong>${best.sharpe_ratio}</strong></span>
+                </div>`;
+            bestDiv.style.display = 'block';
+        }
+
+        // Table
+        if (!results.length) { table.innerHTML = ''; return; }
+        const cols = Object.keys(results[0]);
+        let html = '<thead><tr>' + cols.map(c => `<th>${c.replace(/_/g, ' ')}</th>`).join('') + '</tr></thead><tbody>';
+        results.slice(0, 20).forEach(r => {
+            html += '<tr>' + cols.map(c => {
+                const v = r[c];
+                if (c === 'total_return_pct' || c === 'max_drawdown_pct') {
+                    const color = v >= 0 ? '#10b981' : '#ef4444';
+                    return `<td style="color:${color};font-weight:600;">${v}%</td>`;
+                }
+                return `<td>${v}</td>`;
+            }).join('') + '</tr>';
+        });
+        html += '</tbody>';
+        table.innerHTML = html;
     }
 
     document.getElementById('btTicker').addEventListener('keydown', e => { if (e.key === 'Enter') runBacktest(); });
