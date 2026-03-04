@@ -1,6 +1,6 @@
 """
 Data API Routes — Endpoints for fetching financial data, charts,
-ownership, bandarmology, average price, and market dates.
+ownership, bandarmology, average price, market dates, and market overview.
 """
 
 import re
@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, request
 
 from services.scraping_service import get_financials
 from services.screening_service import get_stock_lists, screen_stocks
+from services.market_service import get_market_overview
 from scrapers.bandarmology import get_broker_summary, calculate_bandar_flow
 
 logger = logging.getLogger(__name__)
@@ -423,4 +424,19 @@ def api_ownership():
 
     except Exception as e:
         logger.exception("Error fetching ownership for %s", ticker_symbol)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_data_bp.route('/api/market-overview', methods=['GET'])
+def api_market_overview():
+    """
+    Return aggregated market overview data.
+    Includes IHSG summary, top movers, sector performance, and market breadth.
+    All data is cached for 5 minutes.
+    """
+    try:
+        data = get_market_overview()
+        return jsonify({'success': True, **data})
+    except Exception as e:
+        logger.exception("Error fetching market overview")
         return jsonify({'success': False, 'error': str(e)}), 500

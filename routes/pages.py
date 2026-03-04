@@ -48,3 +48,9 @@ def watchlist_page():
     """Serve the Watchlist & Portfolio page."""
     return render_template('watchlist.html', active_page='watchlist')
 
+
+@pages_bp.route('/market-overview')
+def market_overview_page():
+    """Serve the Market Overview Dashboard page."""
+    return render_template('market_overview.html', active_page='market')
+

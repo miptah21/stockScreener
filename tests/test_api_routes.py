@@ -47,6 +47,10 @@ class TestPageRoutes:
         resp = client.get('/watchlist')
         assert resp.status_code == 200
 
+    def test_market_overview_page(self, client):
+        resp = client.get('/market-overview')
+        assert resp.status_code == 200
+
 
 class TestApiInputValidation:
     """Tests for API input validation — no external calls."""

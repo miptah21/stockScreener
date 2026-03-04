@@ -21,6 +21,9 @@ screener_cache = TTLCache(maxsize=50, ttl=600)  # 10 min
 # Stock lists metadata cache (static, long TTL)
 stock_lists_cache = TTLCache(maxsize=1, ttl=3600)  # 1 hour
 
+# Market overview cache (IHSG, movers, sectors, breadth)
+market_cache = TTLCache(maxsize=10, ttl=300)  # 5 min
+
 
 def cached(cache_instance, key_func=None):
     """
@@ -65,4 +68,5 @@ def clear_all():
     scraper_cache.clear()
     screener_cache.clear()
     stock_lists_cache.clear()
+    market_cache.clear()
     logger.info("All caches cleared")
