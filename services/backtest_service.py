@@ -58,18 +58,44 @@ def _compute_macd(closes, fast=12, slow=26, signal=9):
     return macd_line, signal_line, histogram
 
 
-def _generate_signals(closes, strategy_type, params):
+def _generate_signals(hist, strategy_type, params):
     """
-    Generate entry/exit boolean Series based on strategy type and params.
-
-    Returns:
-        (entries: pd.Series[bool], exits: pd.Series[bool])
+    Generate entry/exit boolean Series/DataFrames based on strategy type and params.
     """
-    n = len(closes)
-    entries = pd.Series(False, index=closes.index)
-    exits = pd.Series(False, index=closes.index)
+    if isinstance(hist, pd.DataFrame) and 'Close' in hist.columns:
+        closes = hist['Close']
+    else:
+        closes = hist  # fallback if passed Series directly
 
-    if strategy_type == 'rsi':
+    if isinstance(closes, pd.DataFrame):
+        entries = pd.DataFrame(False, index=closes.index, columns=closes.columns)
+        exits = pd.DataFrame(False, index=closes.index, columns=closes.columns)
+    else:
+        entries = pd.Series(False, index=closes.index)
+        exits = pd.Series(False, index=closes.index)
+
+    if strategy_type == 'custom':
+        custom_code = params.get('custom_code', '')
+        if not custom_code:
+            raise ValueError("Kode strategi custom kosong.")
+            
+        local_dict = {}
+        try:
+            # Sandbox the string execution
+            exec(custom_code, globals(), local_dict)
+            if 'custom_strategy' not in local_dict:
+                raise ValueError("Kode tidak memiliki fungsi bernama 'custom_strategy(hist)'")
+                
+            func = local_dict['custom_strategy']
+            # Execute with full historical dataframe
+            e, x = func(hist)
+            entries = e
+            exits = x
+            
+        except Exception as e:
+            raise ValueError(f"Error pada Custom Strategy: {str(e)}")
+
+    elif strategy_type == 'rsi':
         period = int(params.get('rsi_period', 14))
         entry_threshold = float(params.get('rsi_entry', 30))
         exit_threshold = float(params.get('rsi_exit', 70))
@@ -203,25 +229,48 @@ def run_backtest(ticker, strategy_type, params, period='2y',
     if period not in VALID_PERIODS:
         return {'success': False, 'error': f'Invalid period. Use: {VALID_PERIODS}'}
 
-    valid_strategies = ('rsi', 'macd', 'ema_cross', 'combined', 'bollinger')
+    valid_strategies = ('rsi', 'macd', 'ema_cross', 'combined', 'bollinger', 'custom')
     if strategy_type not in valid_strategies:
         return {'success': False, 'error': f'Invalid strategy_type. Use: {valid_strategies}'}
 
     try:
-        # 1. Fetch historical data
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=period)
+        # 1. Fetch historical data for one or multiple tickers
+        tickers = [t.strip().upper() for t in ticker.split(',')]
+        tickers = [t if t.endswith('.JK') else f"{t}.JK" for t in tickers]
+
+        if len(tickers) == 1:
+            stock = yf.Ticker(tickers[0])
+            try:
+                hist = stock.history(period=period)
+            except (TypeError, KeyError, ValueError) as e:
+                return {'success': False, 'error': f'No data available for {tickers[0]}. Ticker may be invalid or delisted.'}
+        else:
+            try:
+                hist = yf.download(tickers, period=period, progress=False)
+            except (TypeError, KeyError, ValueError) as e:
+                return {'success': False, 'error': f'No data available for one or more tickers. Some may be invalid or delisted.'}
 
         if hist.empty or len(hist) < 50:
             return {'success': False, 'error': f'Insufficient data for {ticker} ({period})'}
 
-        closes = hist['Close']
+        if isinstance(hist, pd.DataFrame):
+            if getattr(hist.columns, 'nlevels', 1) > 1:
+                closes = hist['Close']
+            elif 'Close' in hist.columns:
+                closes = hist['Close']
+            else:
+                closes = hist
+        else:
+            closes = hist
 
         # 2. Generate entry/exit signals
-        entries, exits = _generate_signals(closes, strategy_type, params)
+        entries, exits = _generate_signals(hist, strategy_type, params)
 
         # Check if any signals were generated
-        if not entries.any():
+        has_signals = entries.any().any() if isinstance(entries, pd.DataFrame) else entries.any()
+        
+        if not has_signals:
+            bh_ret = round(((closes.iloc[-1] / closes.iloc[0]) - 1).mean() * 100, 2) if isinstance(closes, pd.DataFrame) else round(((closes.iloc[-1] / closes.iloc[0]) - 1) * 100, 2)
             return {
                 'success': True,
                 'summary': {
@@ -231,9 +280,7 @@ def run_backtest(ticker, strategy_type, params, period='2y',
                     'sharpe_ratio': 0,
                     'total_trades': 0,
                     'profit_factor': 0,
-                    'buy_hold_return_pct': round(
-                        ((closes.iloc[-1] / closes.iloc[0]) - 1) * 100, 2
-                    ),
+                    'buy_hold_return_pct': bh_ret,
                 },
                 'equity_curve': {
                     'dates': [closes.index[0].strftime('%Y-%m-%d'),
@@ -244,7 +291,7 @@ def run_backtest(ticker, strategy_type, params, period='2y',
                 'price_data': {'dates': [], 'prices': []},
                 'benchmark_curve': {'dates': [], 'values': []},
                 'trades': [],
-                'message': 'Tidak ada sinyal trading yang dihasilkan. Coba sesuaikan parameter strategi.',
+                'message': 'Tidak ada sinyal trading yang dihasilkan. Coba sesuaikan parameter strategi atau logic code.',
             }
 
         # 3. Run VectorBT portfolio simulation
@@ -257,6 +304,10 @@ def run_backtest(ticker, strategy_type, params, period='2y',
             fees=fees,
             freq='1D',
         )
+        if isinstance(closes, pd.DataFrame):
+            pf_kwargs['cash_sharing'] = True
+            pf_kwargs['group_by'] = True
+
         # Add stop loss / take profit if specified
         if stop_loss_pct and stop_loss_pct > 0:
             pf_kwargs['sl_stop'] = stop_loss_pct / 100
@@ -280,16 +331,23 @@ def run_backtest(ticker, strategy_type, params, period='2y',
             if trades_records is not None and not trades_records.empty:
                 winning = trades_records[trades_records['PnL'] > 0]['PnL'].sum()
                 losing = abs(trades_records[trades_records['PnL'] < 0]['PnL'].sum())
-                profit_factor = round(winning / max(losing, 1), 2)
+                if losing > 0:
+                    profit_factor = round(winning / losing, 2)
+                elif winning > 0:
+                    # All trades are winners, cap at 999.99
+                    profit_factor = 999.99
+                else:
+                    profit_factor = 0
             else:
                 profit_factor = 0
         except Exception:
             profit_factor = 0
 
         # Buy & Hold comparison
-        buy_hold_return = round(
-            ((closes.iloc[-1] / closes.iloc[0]) - 1) * 100, 2
-        )
+        if isinstance(closes, pd.DataFrame):
+            buy_hold_return = round(((closes.iloc[-1] / closes.iloc[0]) - 1).mean() * 100, 2)
+        else:
+            buy_hold_return = round(((closes.iloc[-1] / closes.iloc[0]) - 1) * 100, 2)
 
         # 5. Equity curve
         equity = portfolio.value()
@@ -312,27 +370,47 @@ def run_backtest(ticker, strategy_type, params, period='2y',
         dd_values = [round(_safe_val(v) * 100, 2) for v in dd_sampled.values]
 
         # 7. Price data for chart
-        if len(closes) > 500:
-            price_sampled = closes.iloc[::step]
+        if isinstance(closes, pd.DataFrame):
+            price_series = closes.iloc[:, 0]
         else:
-            price_sampled = closes
+            price_series = closes
+
+        if len(price_series) > 500:
+            price_sampled = price_series.iloc[::step]
+        else:
+            price_sampled = price_series
+            
         price_dates = [d.strftime('%Y-%m-%d') for d in price_sampled.index]
         price_values = [round(_safe_val(v), 0) for v in price_sampled.values]
 
-        # 8. Benchmark (IHSG / ^JKSE)
+        # 8. Benchmark (IHSG / ^JKSE) — aligned to stock's date range
         benchmark_data = {'dates': [], 'values': []}
         try:
             ihsg = yf.Ticker('^JKSE').history(period=period)
             if not ihsg.empty and len(ihsg) > 10:
-                ihsg_norm = (ihsg['Close'] / ihsg['Close'].iloc[0]) * initial_capital
-                if len(ihsg_norm) > 500:
-                    ihsg_sampled = ihsg_norm.iloc[::max(1, len(ihsg_norm) // 500)]
-                else:
-                    ihsg_sampled = ihsg_norm
-                benchmark_data = {
-                    'dates': [d.strftime('%Y-%m-%d') for d in ihsg_sampled.index],
-                    'values': [round(_safe_val(v), 0) for v in ihsg_sampled.values],
-                }
+                # Clip IHSG to match the stock's actual date range
+                stock_start = hist.index.min()
+                stock_end = hist.index.max()
+                # Remove timezone info for comparison if needed
+                if ihsg.index.tz is not None and stock_start.tzinfo is None:
+                    ihsg.index = ihsg.index.tz_localize(None)
+                elif ihsg.index.tz is None and stock_start.tzinfo is not None:
+                    stock_start = stock_start.tz_localize(None)
+                    stock_end = stock_end.tz_localize(None)
+                ihsg_clipped = ihsg.loc[
+                    (ihsg.index >= stock_start) & (ihsg.index <= stock_end)
+                ]
+                if not ihsg_clipped.empty and len(ihsg_clipped) > 5:
+                    # Normalize from the stock's start date
+                    ihsg_norm = (ihsg_clipped['Close'] / ihsg_clipped['Close'].iloc[0]) * initial_capital
+                    if len(ihsg_norm) > 500:
+                        ihsg_sampled = ihsg_norm.iloc[::max(1, len(ihsg_norm) // 500)]
+                    else:
+                        ihsg_sampled = ihsg_norm
+                    benchmark_data = {
+                        'dates': [d.strftime('%Y-%m-%d') for d in ihsg_sampled.index],
+                        'values': [round(_safe_val(v), 0) for v in ihsg_sampled.values],
+                    }
         except Exception:
             pass  # Non-critical, skip if fails
 
@@ -342,13 +420,13 @@ def run_backtest(ticker, strategy_type, params, period='2y',
         return {
             'success': True,
             'summary': {
-                'total_return_pct': round(total_return, 2),
-                'win_rate': round(win_rate, 2),
-                'max_drawdown_pct': round(-abs(max_dd), 2),
-                'sharpe_ratio': round(sharpe, 2),
-                'total_trades': total_trades,
-                'profit_factor': profit_factor,
-                'buy_hold_return_pct': buy_hold_return,
+                'total_return_pct': float(round(total_return, 2)),
+                'win_rate': float(round(win_rate, 2)),
+                'max_drawdown_pct': float(round(-abs(max_dd), 2)),
+                'sharpe_ratio': float(round(sharpe, 2)),
+                'total_trades': int(total_trades),
+                'profit_factor': float(profit_factor),
+                'buy_hold_return_pct': float(buy_hold_return),
             },
             'equity_curve': {
                 'dates': equity_dates,
@@ -414,10 +492,21 @@ def run_optimization(ticker, strategy_type, param_ranges, period='2y',
         return {'success': False, 'error': f'Invalid period. Use: {VALID_PERIODS}'}
 
     try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=period)
+        tickers = [t.strip().upper() for t in ticker.split(',')]
+        if len(tickers) > 1:
+            return {'success': False, 'error': 'Optimasi saat ini hanya mendukung Single Ticker.'}
+            
+        clean_ticker = tickers[0]
+        if not clean_ticker.endswith('.JK'):
+            clean_ticker += '.JK'
+
+        stock = yf.Ticker(clean_ticker)
+        try:
+            hist = stock.history(period=period)
+        except (TypeError, KeyError, ValueError) as e:
+            return {'success': False, 'error': f'No data available for {clean_ticker}. Ticker may be invalid or delisted.'}
         if hist.empty or len(hist) < 50:
-            return {'success': False, 'error': f'Insufficient data for {ticker}'}
+            return {'success': False, 'error': f'Insufficient data for {clean_ticker}'}
 
         closes = hist['Close']
         fees = fees_pct / 100
@@ -558,10 +647,21 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
         return {'success': False, 'error': f'Invalid period. Use: {VALID_PERIODS}'}
 
     try:
-        stock = yf.Ticker(ticker)
-        hist = stock.history(period=period)
+        tickers = [t.strip().upper() for t in ticker.split(',')]
+        if len(tickers) > 1:
+            return {'success': False, 'error': 'Walk-Forward saat ini hanya mendukung Single Ticker.'}
+            
+        clean_ticker = tickers[0]
+        if not clean_ticker.endswith('.JK'):
+            clean_ticker += '.JK'
+
+        stock = yf.Ticker(clean_ticker)
+        try:
+            hist = stock.history(period=period)
+        except (TypeError, KeyError, ValueError) as e:
+            return {'success': False, 'error': f'No data available for {clean_ticker}. Ticker may be invalid or delisted.'}
         if hist.empty or len(hist) < 100:
-            return {'success': False, 'error': f'Insufficient data for {ticker} (need 100+ days)'}
+            return {'success': False, 'error': f'Insufficient data for {clean_ticker} (need 100+ days)'}
 
         closes = hist['Close']
 

@@ -32,6 +32,18 @@ def _validate_ticker(ticker: str) -> str | None:
         return None
     return ticker
 
+def _validate_multi_ticker(ticker_str: str) -> str | None:
+    """Validate multiple comma-separated tickers."""
+    if not ticker_str or not isinstance(ticker_str, str):
+        return None
+    tickers = [t.strip().upper() for t in ticker_str.split(',')]
+    valid = []
+    for t in tickers:
+        if not TICKER_PATTERN.match(t):
+            return None
+        valid.append(t)
+    return ','.join(valid)
+
 
 api_data_bp = Blueprint('api_data', __name__)
 
@@ -463,13 +475,10 @@ def api_backtest():
         return jsonify({'success': False, 'error': 'Missing ticker'}), 400
 
     # Validate ticker format
-    clean = _validate_ticker(ticker)
+    clean = _validate_multi_ticker(ticker)
     if not clean:
-        return jsonify({'success': False, 'error': 'Invalid ticker format'}), 400
-
-    # Append .JK if not present
-    if not clean.endswith('.JK'):
-        clean = clean + '.JK'
+        logger.error(f"Failed validation for ticker: '{ticker}'")
+        return jsonify({'success': False, 'error': f'Invalid ticker format: {ticker}'}), 400
 
     strategy_type = data.get('strategy_type', 'rsi')
     params = data.get('params', {})
@@ -490,6 +499,13 @@ def api_backtest():
             stop_loss_pct=stop_loss_pct,
             take_profit_pct=take_profit_pct,
         )
+        if result.get('success'):
+            for k, v in result.items():
+                if isinstance(v, dict):
+                    for subk, subv in v.items():
+                        logger.info(f"Key: {k}.{subk} Type: {type(subv)}")
+                else:
+                    logger.info(f"Key: {k} Type: {type(v)}")
         return jsonify(result)
     except Exception as e:
         logger.exception("Backtest API error")
@@ -513,11 +529,9 @@ def api_backtest_optimize():
     if not ticker:
         return jsonify({'success': False, 'error': 'Missing ticker'}), 400
 
-    clean = _validate_ticker(ticker)
+    clean = _validate_multi_ticker(ticker)
     if not clean:
         return jsonify({'success': False, 'error': 'Invalid ticker format'}), 400
-    if not clean.endswith('.JK'):
-        clean = clean + '.JK'
 
     strategy_type = data.get('strategy_type', 'rsi')
     param_ranges = data.get('param_ranges', {})
@@ -551,11 +565,9 @@ def api_backtest_walk_forward():
     if not ticker:
         return jsonify({'success': False, 'error': 'Missing ticker'}), 400
 
-    clean = _validate_ticker(ticker)
+    clean = _validate_multi_ticker(ticker)
     if not clean:
         return jsonify({'success': False, 'error': 'Invalid ticker format'}), 400
-    if not clean.endswith('.JK'):
-        clean = clean + '.JK'
 
     strategy_type = data.get('strategy_type', 'rsi')
     param_ranges = data.get('param_ranges', {})
