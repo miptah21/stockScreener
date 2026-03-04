@@ -43,6 +43,10 @@ class TestPageRoutes:
         resp = client.get('/simple-screening')
         assert resp.status_code == 200
 
+    def test_watchlist_page(self, client):
+        resp = client.get('/watchlist')
+        assert resp.status_code == 200
+
 
 class TestApiInputValidation:
     """Tests for API input validation — no external calls."""

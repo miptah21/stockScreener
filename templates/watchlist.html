@@ -1,0 +1,621 @@
+{% extends "base.html" %}
+
+{% block title %}Watchlist & Portfolio — Finance Screener{% endblock %}
+{% block description %}Simpan saham favorit dan lacak portfolio investasi Anda.{% endblock %}
+
+{% block head_styles %}
+<style>
+    /* ─── Watchlist-Specific Styles ─────────────────────────────────── */
+
+    /* Add Section */
+    .add-section {
+        background: var(--bg-card); border: 1px solid var(--glass-border);
+        border-radius: var(--radius); padding: 24px; margin-bottom: 24px;
+        backdrop-filter: blur(12px);
+    }
+    .add-form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .form-group { flex: 1; min-width: 200px; }
+    .form-group label {
+        display: block; font-size: 11px; font-weight: 600; color: var(--text-muted);
+        text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;
+    }
+    .form-input {
+        width: 100%; padding: 12px 16px; background: var(--glass);
+        border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+        color: var(--text-primary); font-family: 'Inter', sans-serif;
+        font-size: 14px; transition: var(--transition); outline: none;
+    }
+    .form-input::placeholder { color: var(--text-muted); }
+    .form-input:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
+    .btn-primary {
+        padding: 12px 28px; background: var(--gradient-primary); border: none;
+        border-radius: var(--radius-sm); color: white; font-family: 'Inter', sans-serif;
+        font-size: 14px; font-weight: 600; cursor: pointer; transition: var(--transition);
+        white-space: nowrap;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(99, 102, 241, 0.35); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; margin-bottom: 24px; }
+    .tab {
+        padding: 10px 24px; border-radius: 100px; font-size: 14px; font-weight: 500;
+        cursor: pointer; transition: var(--transition); background: var(--glass);
+        border: 1px solid var(--glass-border); color: var(--text-secondary);
+    }
+    .tab:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+    .tab.active { background: var(--gradient-primary); color: white; border-color: transparent; }
+    .tab-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 20px; height: 20px; padding: 0 6px;
+        background: rgba(255,255,255,0.2); border-radius: 100px;
+        font-size: 11px; font-weight: 700; margin-left: 6px;
+    }
+
+    /* Panels */
+    .panel { display: none; }
+    .panel.active { display: block; animation: fadeSlideUp 0.3s ease; }
+
+    /* Action bar */
+    .action-bar { display: flex; gap: 8px; margin-bottom: 16px; justify-content: flex-end; flex-wrap: wrap; }
+    .btn-sm {
+        padding: 8px 16px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500;
+        cursor: pointer; transition: var(--transition); background: var(--glass);
+        border: 1px solid var(--glass-border); color: var(--text-secondary);
+        font-family: 'Inter', sans-serif;
+    }
+    .btn-sm:hover { background: var(--bg-card-hover); color: var(--text-primary); border-color: var(--accent-blue); }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center; padding: 60px 20px;
+        background: var(--bg-card); border: 1px solid var(--glass-border);
+        border-radius: var(--radius);
+    }
+    .empty-state__icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state__title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .empty-state__desc { color: var(--text-muted); font-size: 14px; max-width: 400px; margin: 0 auto; }
+
+    /* Watchlist Grid */
+    .watchlist-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 12px;
+    }
+    .wl-card {
+        background: var(--bg-card); border: 1px solid var(--glass-border);
+        border-radius: var(--radius); padding: 20px; transition: var(--transition);
+    }
+    .wl-card:hover { border-color: rgba(99, 102, 241, 0.2); transform: translateY(-2px); box-shadow: var(--shadow-glow); }
+    .wl-card__header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .wl-card__ticker {
+        font-size: 18px; font-weight: 800; color: var(--accent-cyan);
+        text-decoration: none; transition: var(--transition);
+    }
+    .wl-card__ticker:hover { color: var(--accent-blue); }
+    .wl-card__actions { display: flex; gap: 6px; }
+    .wl-card__btn {
+        width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--glass-border);
+        background: var(--glass); color: var(--text-muted); font-size: 14px;
+        cursor: pointer; transition: var(--transition); display: flex;
+        align-items: center; justify-content: center;
+    }
+    .wl-card__btn:hover { background: var(--bg-card-hover); color: var(--text-primary); border-color: var(--accent-blue); }
+    .wl-card__btn--danger:hover { border-color: var(--accent-rose); color: var(--accent-rose); }
+    .wl-card__price { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+    .wl-card__price-val { font-size: 22px; font-weight: 700; }
+    .wl-card__change { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 100px; }
+    .wl-card__change--up { background: rgba(16, 185, 129, 0.12); color: var(--accent-emerald); }
+    .wl-card__change--down { background: rgba(244, 63, 94, 0.12); color: var(--accent-rose); }
+    .wl-card__change--flat { background: rgba(100, 116, 139, 0.12); color: var(--text-secondary); }
+    .wl-card__meta { font-size: 12px; color: var(--text-muted); }
+    .wl-card__notes {
+        margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--glass-border);
+        font-size: 12px; color: var(--text-secondary); font-style: italic;
+    }
+    .wl-card__loading {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 13px; color: var(--text-muted);
+    }
+    .dot-pulse {
+        display: inline-block; width: 6px; height: 6px; background: var(--accent-blue);
+        border-radius: 50%; animation: pulse 1s infinite;
+    }
+
+    /* Portfolio Table */
+    .portfolio-wrap {
+        background: var(--bg-card); border: 1px solid var(--glass-border);
+        border-radius: var(--radius); overflow: hidden;
+    }
+    .portfolio-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 18px 24px; border-bottom: 1px solid var(--glass-border);
+        flex-wrap: wrap; gap: 12px;
+    }
+    .portfolio-header h3 { font-size: 16px; font-weight: 600; }
+    .portfolio-table { width: 100%; border-collapse: collapse; }
+    .portfolio-table thead th {
+        padding: 12px 16px; text-align: left; font-size: 10px; font-weight: 600;
+        color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px;
+        border-bottom: 1px solid var(--glass-border); background: rgba(255, 255, 255, 0.02);
+        white-space: nowrap;
+    }
+    .portfolio-table tbody td {
+        padding: 14px 16px; font-size: 13px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03); color: var(--text-secondary);
+    }
+    .portfolio-table tbody tr { transition: var(--transition); }
+    .portfolio-table tbody tr:hover { background: var(--bg-card-hover); }
+
+    .pnl-positive { color: var(--accent-emerald); font-weight: 700; }
+    .pnl-negative { color: var(--accent-rose); font-weight: 700; }
+    .pnl-neutral { color: var(--text-secondary); }
+    .pnl-unknown { color: var(--accent-amber); font-style: italic; }
+
+    /* Delete in table */
+    .btn-icon {
+        width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--glass-border);
+        background: var(--glass); color: var(--text-muted); font-size: 13px;
+        cursor: pointer; transition: var(--transition);
+    }
+    .btn-icon:hover { border-color: var(--accent-rose); color: var(--accent-rose); background: rgba(244,63,94,0.08); }
+
+    /* Modal */
+    .modal-overlay {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+        z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+        background: var(--bg-secondary); border: 1px solid var(--glass-border);
+        border-radius: var(--radius); padding: 32px; width: 100%; max-width: 480px;
+        animation: fadeSlideUp 0.2s ease;
+    }
+    .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+    .modal .form-group { margin-bottom: 16px; min-width: unset; }
+    .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+    .btn-cancel {
+        flex: 1; padding: 12px; background: var(--glass); border: 1px solid var(--glass-border);
+        border-radius: var(--radius-sm); color: var(--text-secondary); font-family: 'Inter', sans-serif;
+        font-size: 14px; font-weight: 500; cursor: pointer; transition: var(--transition);
+    }
+    .btn-cancel:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+    .btn-confirm {
+        flex: 1; padding: 12px; background: var(--gradient-primary); border: none;
+        border-radius: var(--radius-sm); color: white; font-family: 'Inter', sans-serif;
+        font-size: 14px; font-weight: 600; cursor: pointer; transition: var(--transition);
+    }
+    .btn-confirm:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3); }
+
+    /* Responsive overrides */
+    @media (max-width: 768px) {
+        .add-form { flex-direction: column; }
+        .watchlist-grid { grid-template-columns: 1fr; }
+        .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+        .tab { flex-shrink: 0; }
+        .portfolio-table { font-size: 11px; }
+        .portfolio-table thead th, .portfolio-table tbody td { padding: 8px 10px; white-space: nowrap; }
+    }
+    @media (max-width: 480px) {
+        .modal { margin: 16px; padding: 24px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Header -->
+    <header class="header">
+        <div class="header__badge">⭐ WATCHLIST & PORTFOLIO</div>
+        <h1>Watchlist & Portfolio</h1>
+        <p>Simpan saham favorit Anda, lacak harga real-time, dan kelola portfolio investasi dengan perhitungan P/L otomatis.</p>
+    </header>
+
+    <!-- Add Ticker -->
+    <section class="add-section">
+        <div class="add-form">
+            <div class="form-group">
+                <label for="addTicker">Ticker Saham</label>
+                <input type="text" id="addTicker" class="form-input" placeholder="cth: BBCA atau TLKM" autocomplete="off" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label for="addNotes">Catatan (opsional)</label>
+                <input type="text" id="addNotes" class="form-input" placeholder="cth: Bank terbaik, dividen tinggi" maxlength="200">
+            </div>
+            <button class="btn-primary" onclick="addToWatchlist()">⭐ Tambah</button>
+        </div>
+    </section>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <div class="tab active" data-tab="watchlist" onclick="switchTab('watchlist')">
+            📋 Watchlist <span class="tab-badge" id="wlCount">0</span>
+        </div>
+        <div class="tab" data-tab="portfolio" onclick="switchTab('portfolio')">
+            💼 Portfolio <span class="tab-badge" id="pfCount">0</span>
+        </div>
+    </div>
+
+    <!-- Watchlist Panel -->
+    <div id="panelWatchlist" class="panel active">
+        <div class="action-bar">
+            <button class="btn-sm" onclick="refreshPrices()" title="Refresh semua harga">🔄 Refresh Harga</button>
+            <button class="btn-sm" onclick="exportData()">📤 Export</button>
+            <label class="btn-sm" style="margin:0;">📥 Import <input type="file" accept=".json" onchange="importData(event)" style="display:none;"></label>
+        </div>
+        <div id="watchlistContent"></div>
+    </div>
+
+    <!-- Portfolio Panel -->
+    <div id="panelPortfolio" class="panel">
+        <div class="action-bar">
+            <button class="btn-primary" onclick="openPortfolioModal()" style="padding:8px 20px;font-size:13px;">+ Tambah Entry</button>
+        </div>
+        <div id="portfolioStats" class="stats-grid"></div>
+        <div id="portfolioContent"></div>
+    </div>
+{% endblock %}
+
+{% block footer %}
+    <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a>. Data may be delayed.</p>
+    <p style="margin-top: 6px;">Watchlist & Portfolio data disimpan di browser Anda (localStorage). · © 2026</p>
+{% endblock %}
+
+{% block scripts %}
+<!-- Portfolio Add Modal -->
+<div id="portfolioModal" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+        <h3>💼 Tambah ke Portfolio</h3>
+        <div class="form-group">
+            <label for="modalTicker">Ticker</label>
+            <input type="text" id="modalTicker" class="form-input" placeholder="cth: BBCA.JK" maxlength="20">
+        </div>
+        <div class="form-group">
+            <label for="modalBuyPrice">Harga Beli (per lembar)</label>
+            <input type="number" id="modalBuyPrice" class="form-input" placeholder="cth: 9500" min="1" step="1">
+        </div>
+        <div class="form-group">
+            <label for="modalLots">Jumlah Lot</label>
+            <input type="number" id="modalLots" class="form-input" placeholder="cth: 10" min="1" step="1">
+        </div>
+        <div class="form-group">
+            <label for="modalBuyDate">Tanggal Beli</label>
+            <input type="date" id="modalBuyDate" class="form-input">
+        </div>
+        <div class="form-group">
+            <label for="modalNotes">Catatan (opsional)</label>
+            <input type="text" id="modalNotes" class="form-input" placeholder="cth: Beli saat RSI < 30" maxlength="200">
+        </div>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeModal()">Batal</button>
+            <button class="btn-confirm" onclick="confirmAddPortfolio()">Tambahkan</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
+<script>
+    // ─── State ────────────────────────────────────────────────────────
+    let priceCache = {};
+
+    // ─── Init ─────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+        renderWatchlist();
+        renderPortfolio();
+        updateCounts();
+        document.getElementById('addTicker').addEventListener('keydown', e => {
+            if (e.key === 'Enter') addToWatchlist();
+        });
+        // Escape key closes modal
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeModal();
+        });
+    });
+
+    // ─── Tab Switching ────────────────────────────────────────────────
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+        document.getElementById('panelWatchlist').classList.toggle('active', tab === 'watchlist');
+        document.getElementById('panelPortfolio').classList.toggle('active', tab === 'portfolio');
+    }
+
+    function updateCounts() {
+        document.getElementById('wlCount').textContent = WatchlistManager.count();
+        document.getElementById('pfCount').textContent = PortfolioManager.count();
+    }
+
+    // ─── Watchlist ────────────────────────────────────────────────────
+    function addToWatchlist() {
+        const raw = document.getElementById('addTicker').value.trim().toUpperCase();
+        const notes = document.getElementById('addNotes').value.trim();
+        if (!raw) return;
+        const ticker = raw.includes('.') ? raw : raw + '.JK';
+        if (WatchlistManager.has(ticker)) {
+            alert(`${ticker} sudah ada di watchlist.`);
+            return;
+        }
+        WatchlistManager.add(ticker, notes);
+        document.getElementById('addTicker').value = '';
+        document.getElementById('addNotes').value = '';
+        renderWatchlist();
+        updateCounts();
+    }
+
+    function removeFromWatchlist(ticker) {
+        if (!confirm(`Hapus ${ticker} dari watchlist?`)) return;
+        WatchlistManager.remove(ticker);
+        renderWatchlist();
+        updateCounts();
+    }
+
+    function renderWatchlist() {
+        const items = WatchlistManager.getAll();
+        const container = document.getElementById('watchlistContent');
+
+        if (items.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state__icon">⭐</div>
+                    <div class="empty-state__title">Watchlist Kosong</div>
+                    <div class="empty-state__desc">Tambahkan saham favorit Anda menggunakan form di atas untuk mulai melacak harga.</div>
+                </div>`;
+            return;
+        }
+
+        let html = '<div class="watchlist-grid">';
+        items.forEach(item => {
+            const safe = escapeHtml(item.ticker);
+            const safeId = safe.replace(/\./g, '_');
+            const cached = priceCache[item.ticker];
+            const priceHtml = cached
+                ? renderPriceCard(cached)
+                : `<div class="wl-card__loading"><span class="dot-pulse"></span> Memuat harga...</div>`;
+            const notesHtml = item.notes
+                ? `<div class="wl-card__notes">📝 ${escapeHtml(item.notes)}</div>`
+                : '';
+
+            html += `
+                <div class="wl-card" id="wl-${safeId}">
+                    <div class="wl-card__header">
+                        <a href="/?ticker=${encodeURIComponent(item.ticker)}" class="wl-card__ticker" target="_blank">${safe}</a>
+                        <div class="wl-card__actions">
+                            <button class="wl-card__btn" onclick="openPortfolioModal('${safe}')" title="Tambah ke Portfolio">💼</button>
+                            <button class="wl-card__btn wl-card__btn--danger" onclick="removeFromWatchlist('${safe}')" title="Hapus">✕</button>
+                        </div>
+                    </div>
+                    ${priceHtml}
+                    <div class="wl-card__meta">Ditambahkan: ${new Date(item.addedAt).toLocaleDateString('id-ID')}</div>
+                    ${notesHtml}
+                </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+        // Fetch prices for un-cached items
+        items.forEach(item => {
+            if (!priceCache[item.ticker]) fetchPrice(item.ticker);
+        });
+    }
+
+    function renderPriceCard(data) {
+        if (data.price == null) return `<div class="wl-card__loading">⚠️ Data tidak tersedia</div>`;
+        const prefix = data.currency === 'IDR' ? 'Rp ' : (data.currency === 'USD' ? '$ ' : '');
+        const sign = data.change >= 0 ? '+' : '';
+        const cls = data.change > 0 ? 'up' : (data.change < 0 ? 'down' : 'flat');
+        return `
+            <div class="wl-card__price">
+                <span class="wl-card__price-val">${prefix}${data.price.toLocaleString()}</span>
+                <span class="wl-card__change wl-card__change--${cls}">${sign}${data.changePct.toFixed(2)}%</span>
+            </div>`;
+    }
+
+    async function fetchPrice(ticker) {
+        try {
+            const r = await fetch(`/api/history?ticker=${encodeURIComponent(ticker)}&period=5d`);
+            const data = await r.json();
+            if (data.success && data.closes && data.closes.length >= 1) {
+                const latest = data.closes[data.closes.length - 1];
+                const prev = data.closes.length >= 2 ? data.closes[data.closes.length - 2] : latest;
+                const price = latest;
+                const change = price - prev;
+                const changePct = prev > 0 ? (change / prev) * 100 : 0;
+                priceCache[ticker] = { price, change, changePct, currency: data.currency || 'IDR' };
+            } else {
+                priceCache[ticker] = { price: null };
+            }
+        } catch {
+            priceCache[ticker] = { price: null };
+        }
+        // Re-render specific card
+        const safeId = escapeHtml(ticker).replace(/\./g, '_');
+        const cardEl = document.getElementById('wl-' + safeId);
+        if (cardEl) {
+            const el = cardEl.querySelector('.wl-card__loading');
+            if (el && priceCache[ticker]) el.outerHTML = renderPriceCard(priceCache[ticker]);
+        }
+    }
+
+    function refreshPrices() {
+        priceCache = {};
+        renderWatchlist();
+    }
+
+    // ─── Portfolio ────────────────────────────────────────────────────
+    function openPortfolioModal(ticker) {
+        const el = document.getElementById('modalTicker');
+        el.value = ticker || '';
+        el.readOnly = !!ticker;
+        document.getElementById('modalBuyPrice').value = '';
+        document.getElementById('modalLots').value = '';
+        document.getElementById('modalBuyDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('modalNotes').value = '';
+        document.getElementById('portfolioModal').classList.add('active');
+        // Focus first editable field
+        setTimeout(() => (ticker ? document.getElementById('modalBuyPrice') : el).focus(), 100);
+    }
+
+    function closeModal() {
+        document.getElementById('portfolioModal').classList.remove('active');
+    }
+
+    function confirmAddPortfolio() {
+        let ticker = document.getElementById('modalTicker').value.trim().toUpperCase();
+        const buyPrice = parseFloat(document.getElementById('modalBuyPrice').value);
+        const lots = parseInt(document.getElementById('modalLots').value);
+        const buyDate = document.getElementById('modalBuyDate').value;
+        const notes = document.getElementById('modalNotes').value.trim();
+
+        if (!ticker) { alert('Masukkan ticker saham.'); return; }
+        ticker = ticker.includes('.') ? ticker : ticker + '.JK';
+        if (isNaN(buyPrice) || buyPrice <= 0) { alert('Masukkan harga beli yang valid.'); return; }
+        if (isNaN(lots) || lots <= 0) { alert('Masukkan jumlah lot yang valid.'); return; }
+
+        PortfolioManager.add({ ticker, buyPrice, lots, buyDate, notes });
+        closeModal();
+        updateCounts();
+        renderPortfolio();
+        switchTab('portfolio');
+    }
+
+    function removePortfolio(id) {
+        if (!confirm('Hapus entry portfolio ini?')) return;
+        PortfolioManager.remove(id);
+        renderPortfolio();
+        updateCounts();
+    }
+
+    async function renderPortfolio() {
+        const entries = PortfolioManager.getAll();
+        const statsEl = document.getElementById('portfolioStats');
+        const contentEl = document.getElementById('portfolioContent');
+
+        if (entries.length === 0) {
+            statsEl.innerHTML = '';
+            contentEl.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state__icon">💼</div>
+                    <div class="empty-state__title">Portfolio Kosong</div>
+                    <div class="empty-state__desc">Klik tombol "+ Tambah Entry" atau 💼 pada saham di Watchlist untuk menambahkan.</div>
+                </div>`;
+            return;
+        }
+
+        // Fetch prices
+        const uniqueTickers = [...new Set(entries.map(e => e.ticker))];
+        await Promise.all(uniqueTickers.map(t => priceCache[t] ? Promise.resolve() : fetchPrice(t)));
+
+        let totalInvested = 0, totalValue = 0, hasUnknown = false;
+        const rows = entries.map(e => {
+            const buyPrice = Math.round(e.buyPrice); // Ensure integer (IDX stocks)
+            const shares = e.lots * 100;
+            const invested = buyPrice * shares;
+            totalInvested += invested;
+
+            const cached = priceCache[e.ticker];
+            const currentPrice = cached?.price;
+            const currentValue = currentPrice ? currentPrice * shares : null;
+            if (currentValue != null) totalValue += currentValue;
+            else { totalValue += invested; hasUnknown = true; }
+
+            const pnl = currentValue != null ? currentValue - invested : null;
+            const pnlPct = pnl != null && invested > 0 ? (pnl / invested) * 100 : null;
+            return { ...e, buyPrice, shares, invested, currentPrice, currentValue, pnl, pnlPct };
+        });
+
+        const totalPnl = totalValue - totalInvested;
+        const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+        const unknownNote = hasUnknown ? ' <span class="pnl-unknown" title="Beberapa harga tidak tersedia">*</span>' : '';
+
+        statsEl.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-card__value" style="color:var(--accent-blue);">${formatRupiah(totalInvested)}</div>
+                <div class="stat-card__label">Total Investasi</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card__value" style="color:var(--accent-cyan);">${formatRupiah(totalValue)}${unknownNote}</div>
+                <div class="stat-card__label">Nilai Saat Ini</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card__value ${totalPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${totalPnl >= 0 ? '+' : ''}${formatRupiah(totalPnl)}</div>
+                <div class="stat-card__label">P/L</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card__value ${totalPnlPct >= 0 ? 'pnl-positive' : 'pnl-negative'}">${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(2)}%</div>
+                <div class="stat-card__label">P/L %</div>
+            </div>`;
+
+        let tableHtml = `
+            <div class="portfolio-wrap">
+                <div class="portfolio-header"><h3>💼 Portfolio Entries (${entries.length})</h3></div>
+                <div class="table-responsive">
+                    <table class="portfolio-table">
+                        <thead><tr>
+                            <th>#</th><th>Ticker</th><th>Harga Beli</th><th>Lot</th>
+                            <th>Investasi</th><th>Harga Sekarang</th><th>Nilai</th>
+                            <th>P/L</th><th>P/L %</th><th>Tgl Beli</th><th></th>
+                        </tr></thead>
+                        <tbody>`;
+
+        rows.forEach((r, i) => {
+            const pnlClass = r.pnl > 0 ? 'pnl-positive' : (r.pnl < 0 ? 'pnl-negative' : (r.pnl === null ? 'pnl-unknown' : 'pnl-neutral'));
+            const pnlSign = r.pnl != null && r.pnl >= 0 ? '+' : '';
+            const safeTicker = escapeHtml(r.ticker);
+            tableHtml += `
+                <tr>
+                    <td style="font-weight:700;color:var(--text-primary);">${i + 1}</td>
+                    <td><a href="/?ticker=${encodeURIComponent(r.ticker)}" style="color:var(--accent-cyan);text-decoration:none;font-weight:700;" target="_blank">${safeTicker}</a></td>
+                    <td>Rp ${r.buyPrice.toLocaleString()}</td>
+                    <td>${r.lots}</td>
+                    <td>${formatRupiah(r.invested)}</td>
+                    <td>${r.currentPrice != null ? 'Rp ' + r.currentPrice.toLocaleString() : '<span class="pnl-unknown">N/A</span>'}</td>
+                    <td>${r.currentValue != null ? formatRupiah(r.currentValue) : '<span class="pnl-unknown">N/A</span>'}</td>
+                    <td class="${pnlClass}">${r.pnl != null ? pnlSign + formatRupiah(r.pnl) : 'N/A'}</td>
+                    <td class="${pnlClass}">${r.pnlPct != null ? pnlSign + r.pnlPct.toFixed(2) + '%' : 'N/A'}</td>
+                    <td style="color:var(--text-muted);">${escapeHtml(r.buyDate || '—')}</td>
+                    <td><button class="btn-icon" onclick="removePortfolio('${escapeHtml(r.id)}')" title="Hapus">✕</button></td>
+                </tr>`;
+        });
+
+        tableHtml += '</tbody></table></div></div>';
+        contentEl.innerHTML = tableHtml;
+    }
+
+    // ─── Export / Import ──────────────────────────────────────────────
+    function exportData() {
+        const json = PortfolioManager.exportJSON();
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `watchlist_portfolio_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    function importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            if (PortfolioManager.importJSON(e.target.result)) {
+                priceCache = {};
+                renderWatchlist();
+                renderPortfolio();
+                updateCounts();
+                alert('Data berhasil di-import!');
+            } else {
+                alert('Format file tidak valid.');
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────
+    function formatRupiah(val) {
+        if (val == null) return '—';
+        const abs = Math.abs(val);
+        const sign = val < 0 ? '-' : '';
+        if (abs >= 1e12) return sign + 'Rp ' + (abs / 1e12).toFixed(1) + 'T';
+        if (abs >= 1e9) return sign + 'Rp ' + (abs / 1e9).toFixed(1) + 'B';
+        if (abs >= 1e6) return sign + 'Rp ' + (abs / 1e6).toFixed(1) + 'M';
+        return sign + 'Rp ' + abs.toLocaleString();
+    }
+</script>
+{% endblock %}

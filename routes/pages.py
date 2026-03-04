@@ -41,3 +41,10 @@ def technical_screening_page():
 def simple_screening_page():
     """Serve the Simple RSI & MACD Screening page."""
     return render_template('simple_screening.html', active_page='simple')
+
+
+@pages_bp.route('/watchlist')
+def watchlist_page():
+    """Serve the Watchlist & Portfolio page."""
+    return render_template('watchlist.html', active_page='watchlist')
+

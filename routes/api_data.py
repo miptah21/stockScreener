@@ -125,7 +125,7 @@ def api_history():
         return jsonify({'success': False, 'error': 'Valid ticker is required.'}), 400
 
     period = request.args.get('period', '6mo').strip()
-    valid_periods = ['1mo', '3mo', '6mo', '1y', '2y', '5y', 'max']
+    valid_periods = ['5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'max']
     if period not in valid_periods:
         period = '6mo'
 
@@ -140,6 +140,13 @@ def api_history():
         closes = [round(float(c), 2) for c in hist['Close']]
         volumes = [int(v) for v in hist['Volume']]
 
+        # Get currency info for display
+        try:
+            info = ticker.info or {}
+            currency = info.get('currency', 'IDR')
+        except Exception:
+            currency = 'IDR'
+
         return jsonify({
             'success': True,
             'ticker': ticker_symbol,
@@ -147,6 +154,7 @@ def api_history():
             'dates': dates,
             'closes': closes,
             'volumes': volumes,
+            'currency': currency,
         })
     except Exception as e:
         logger.exception("Error fetching history for %s", ticker_symbol)
