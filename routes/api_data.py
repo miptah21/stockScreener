@@ -1,6 +1,7 @@
 """
 Data API Routes — Endpoints for fetching financial data, charts,
-ownership, bandarmology, average price, market dates, market overview, and backtesting.
+ownership, bandarmology, average price, market dates, market overview,
+backtesting, and sentiment analysis.
 """
 
 import re
@@ -15,6 +16,7 @@ from services.scraping_service import get_financials
 from services.screening_service import get_stock_lists, screen_stocks
 from services.market_service import get_market_overview
 from services.backtest_service import run_backtest, run_optimization, run_walk_forward
+from services.sentiment_service import get_sentiment_analysis
 from scrapers.bandarmology import get_broker_summary, calculate_bandar_flow
 
 logger = logging.getLogger(__name__)
@@ -589,4 +591,28 @@ def api_backtest_walk_forward():
         return jsonify(result)
     except Exception as e:
         logger.exception("Walk-forward API error")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_data_bp.route('/api/sentiment', methods=['GET'])
+def api_sentiment():
+    """
+    AI Sentiment Analysis — Aggregate news from 6 sources and analyze
+    sentiment using LLMs (Claude → Gemini → VADER fallback).
+
+    Query params:
+        ticker (str): Stock ticker (e.g., BBCA.JK, AAPL)
+    """
+    ticker = _validate_ticker(request.args.get('ticker'))
+    if not ticker:
+        return jsonify({'success': False, 'error': 'Valid ticker is required.'}), 400
+
+    try:
+        result = get_sentiment_analysis(ticker)
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
+    except Exception as e:
+        logger.exception("Sentiment API error for %s", ticker)
         return jsonify({'success': False, 'error': str(e)}), 500

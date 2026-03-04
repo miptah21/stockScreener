@@ -25,6 +25,14 @@ class Config:
     GOAPI_API_KEY_2 = os.getenv('GOAPI_API_KEY_2')
     SECTORS_API_KEY = os.getenv('SECTORS_API_KEY')
 
+    # Sentiment Analysis API Keys
+    MARKETAUX_API_KEY = os.getenv('MARKETAUX_API_KEY')
+    NEWSAPI_AI_KEY = os.getenv('NEWSAPI_AI_KEY')
+    FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+    ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+    GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+
     # CORS — comma-separated origins, or '*' for development
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
 

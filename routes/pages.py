@@ -60,3 +60,9 @@ def backtest_page():
     """Serve the Backtesting Engine page."""
     return render_template('backtest.html', active_page='backtest')
 
+
+@pages_bp.route('/sentiment')
+def sentiment_page():
+    """Serve the AI Sentiment Analysis page."""
+    return render_template('sentiment.html', active_page='sentiment')
+

@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+
+{% block title %}AI Sentiment Analysis — Finance Screener{% endblock %}
+{% block description %}Analyze stock sentiment using AI from 6 news sources with LLM-powered analysis.{% endblock %}
+
+{% block head_styles %}
+<style>
+    /* ── Sentiment Page Styles ── */
+    .sa-header { text-align: center; margin-bottom: 28px; }
+    .sa-header__badge {
+        display: inline-block;
+        padding: 6px 20px;
+        border-radius: 20px;
+        background: rgba(139, 92, 246, 0.15);
+        color: #a78bfa;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+    }
+    .sa-header__title {
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #a78bfa, #22d3ee);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 8px;
+    }
+    .sa-header__subtitle { color: var(--text-muted); font-size: 15px; }
+
+    /* ── Search Bar ── */
+    .sa-search {
+        max-width: 580px;
+        margin: 0 auto 28px;
+        display: flex;
+        gap: 10px;
+    }
+    .sa-search__input {
+        flex: 1;
+        padding: 14px 18px;
+        border-radius: 12px;
+        border: 1px solid var(--glass-border);
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        color: var(--text-primary);
+        font-size: 15px;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    .sa-search__input:focus { border-color: #a78bfa; }
+    .sa-search__input::placeholder { color: var(--text-muted); }
+    .sa-search__btn {
+        padding: 14px 28px;
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        white-space: nowrap;
+    }
+    .sa-search__btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(139, 92, 246, 0.3); }
+    .sa-search__btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* ── Loading / Error ── */
+    .sa-loading { display: none; text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .sa-loading__spinner {
+        width: 40px; height: 40px;
+        border: 3px solid rgba(255,255,255,0.1);
+        border-top-color: #a78bfa;
+        border-radius: 50%;
+        animation: sa-spin 0.8s linear infinite;
+        margin: 0 auto 16px;
+    }
+    @keyframes sa-spin { to { transform: rotate(360deg); } }
+    .sa-error { display: none; text-align: center; padding: 20px; color: #ef4444; background: rgba(239,68,68,0.08); border-radius: 12px; margin-bottom: 20px; }
+    .sa-empty { display: none; text-align: center; padding: 40px; color: var(--text-muted); }
+
+    /* ── Results Container ── */
+    .sa-results { display: none; }
+
+    /* ── Summary Row ── */
+    .sa-summary {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        gap: 20px;
+        margin-bottom: 24px;
+    }
+    @media (max-width: 768px) { .sa-summary { grid-template-columns: 1fr; } }
+
+    /* ── Gauge Card ── */
+    .sa-gauge-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center;
+        backdrop-filter: blur(20px);
+    }
+    .sa-gauge-card__label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 16px;
+    }
+    .sa-gauge {
+        position: relative;
+        width: 160px;
+        height: 90px;
+        margin: 0 auto;
+    }
+    .sa-gauge__score {
+        font-size: 2.4rem;
+        font-weight: 800;
+        margin-top: 8px;
+    }
+    .sa-gauge__verdict {
+        font-size: 16px;
+        font-weight: 700;
+        margin-top: 4px;
+        letter-spacing: 1px;
+    }
+    .sa-gauge__model {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(99,102,241,0.12);
+        color: #818cf8;
+    }
+    .verdict-bullish { color: #10b981; }
+    .verdict-bearish { color: #ef4444; }
+    .verdict-neutral { color: #6b7280; }
+
+    /* ── Stats Grid ── */
+    .sa-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 10px;
+    }
+    .sa-stat {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        backdrop-filter: blur(20px);
+        transition: transform 0.2s;
+    }
+    .sa-stat:hover { transform: translateY(-2px); }
+    .sa-stat__label {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+    }
+    .sa-stat__value { font-size: 1.5rem; font-weight: 800; }
+    .sa-stat__value--up { color: #10b981; }
+    .sa-stat__value--down { color: #ef4444; }
+    .sa-stat__value--neutral { color: var(--text-primary); }
+
+    /* ── Distribution Bar ── */
+    .sa-dist-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 24px;
+        backdrop-filter: blur(20px);
+    }
+    .sa-dist-card__title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+    }
+    .sa-dist-bar {
+        display: flex;
+        height: 32px;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+    .sa-dist-bar__seg {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+        transition: width 0.6s ease;
+    }
+    .sa-dist-bar__seg--bull { background: linear-gradient(135deg, #10b981, #059669); }
+    .sa-dist-bar__seg--bear { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .sa-dist-bar__seg--neut { background: linear-gradient(135deg, #4b5563, #6b7280); }
+    .sa-dist-legend {
+        display: flex;
+        gap: 20px;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+    .sa-dist-legend__dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 6px;
+        vertical-align: middle;
+    }
+
+    /* ── Source Breakdown ── */
+    .sa-sources {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    .sa-source-chip {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid var(--glass-border);
+        color: var(--text-secondary);
+    }
+    .sa-source-chip__count {
+        display: inline-block;
+        min-width: 16px;
+        text-align: center;
+        padding: 1px 5px;
+        border-radius: 10px;
+        background: rgba(139,92,246,0.2);
+        color: #a78bfa;
+        font-size: 10px;
+        margin-left: 4px;
+    }
+
+    /* ── News Feed ── */
+    .sa-feed { margin-top: 8px; }
+    .sa-article {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 18px;
+        margin-bottom: 10px;
+        backdrop-filter: blur(20px);
+        transition: transform 0.15s, border-color 0.2s;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 16px;
+        align-items: center;
+    }
+    .sa-article:hover { transform: translateY(-2px); border-color: rgba(167,139,250,0.3); }
+    .sa-article__source {
+        font-size: 11px;
+        font-weight: 600;
+        color: #a78bfa;
+        margin-bottom: 4px;
+    }
+    .sa-article__title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        line-height: 1.4;
+        margin-bottom: 4px;
+    }
+    .sa-article__title a {
+        color: inherit;
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+    .sa-article__title a:hover { color: #a78bfa; }
+    .sa-article__date { font-size: 11px; color: var(--text-muted); }
+    .sa-article__snippet {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 4px;
+        line-height: 1.4;
+        max-height: 2.8em;
+        overflow: hidden;
+    }
+
+    /* ── Sentiment Badge ── */
+    .sa-badge {
+        text-align: center;
+        min-width: 90px;
+    }
+    .sa-badge__pill {
+        display: inline-block;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+    .sa-badge__pill--bullish { background: rgba(16,185,129,0.15); color: #10b981; }
+    .sa-badge__pill--bearish { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .sa-badge__pill--neutral { background: rgba(107,114,128,0.15); color: #9ca3af; }
+    .sa-badge__score {
+        display: block;
+        font-size: 18px;
+        font-weight: 800;
+        margin-top: 4px;
+    }
+    .sa-badge__conf {
+        font-size: 10px;
+        color: var(--text-muted);
+        margin-top: 2px;
+    }
+    .sa-badge__reasoning {
+        font-size: 10px;
+        color: var(--text-muted);
+        margin-top: 4px;
+        max-width: 120px;
+        line-height: 1.3;
+        cursor: help;
+    }
+
+    /* ── Confidence bar ── */
+    .sa-conf-bar {
+        width: 80px;
+        height: 4px;
+        background: rgba(255,255,255,0.08);
+        border-radius: 2px;
+        margin: 4px auto 0;
+        overflow: hidden;
+    }
+    .sa-conf-bar__fill {
+        height: 100%;
+        border-radius: 2px;
+        transition: width 0.4s ease;
+    }
+
+    /* Canvas chart */
+    .sa-chart-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 20px;
+        backdrop-filter: blur(20px);
+    }
+    .sa-chart-card__title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <div class="sa-header">
+        <div class="sa-header__badge">● 🧠 AI SENTIMENT ANALYSIS</div>
+        <h1 class="sa-header__title">News Sentiment Analyzer</h1>
+        <p class="sa-header__subtitle">Analisis sentimen berita saham dari 6 sumber menggunakan AI (Claude / Gemini / VADER)</p>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="sa-search">
+        <input type="text" class="sa-search__input" id="saTicker" placeholder="Masukkan ticker (contoh: BBCA, AAPL)" value="">
+        <button class="sa-search__btn" id="saBtn" onclick="analyzeSentiment()">🧠 Analyze</button>
+    </div>
+
+    <!-- Loading -->
+    <div id="saLoading" class="sa-loading">
+        <div class="sa-loading__spinner"></div>
+        <div>Mengumpulkan berita dari 6 sumber dan menganalisis sentimen...</div>
+        <div style="font-size:12px; margin-top:8px; color:var(--text-muted);">Proses ini membutuhkan 10–30 detik</div>
+    </div>
+
+    <!-- Error -->
+    <div id="saError" class="sa-error"></div>
+
+    <!-- Empty -->
+    <div id="saEmpty" class="sa-empty">
+        <div style="font-size:48px; margin-bottom:12px;">📰</div>
+        <div>Tidak ada berita ditemukan untuk ticker ini.</div>
+    </div>
+
+    <!-- Results -->
+    <div id="saResults" class="sa-results">
+        <!-- Summary Row -->
+        <div class="sa-summary">
+            <!-- Gauge -->
+            <div class="sa-gauge-card">
+                <div class="sa-gauge-card__label">Overall Sentiment</div>
+                <div class="sa-gauge">
+                    <canvas id="gaugeCanvas" width="160" height="90"></canvas>
+                </div>
+                <div id="saScore" class="sa-gauge__score">0.00</div>
+                <div id="saVerdict" class="sa-gauge__verdict verdict-neutral">NEUTRAL</div>
+                <div id="saModel" class="sa-gauge__model">VADER</div>
+            </div>
+
+            <!-- Stats -->
+            <div class="sa-stats" id="saStats"></div>
+        </div>
+
+        <!-- Distribution Bar -->
+        <div class="sa-dist-card">
+            <div class="sa-dist-card__title">📊 Sentiment Distribution</div>
+            <div class="sa-dist-bar" id="saDistBar"></div>
+            <div class="sa-dist-legend">
+                <span><span class="sa-dist-legend__dot" style="background:#10b981;"></span>Bullish</span>
+                <span><span class="sa-dist-legend__dot" style="background:#ef4444;"></span>Bearish</span>
+                <span><span class="sa-dist-legend__dot" style="background:#6b7280;"></span>Neutral</span>
+            </div>
+        </div>
+
+        <!-- Source Breakdown -->
+        <div id="saSources" class="sa-sources"></div>
+
+        <!-- News Feed -->
+        <div class="sa-chart-card">
+            <div class="sa-chart-card__title">📰 News Feed — <span id="saArticleCount">0</span> articles</div>
+            <div id="saFeed" class="sa-feed"></div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function analyzeSentiment() {
+        const raw = document.getElementById('saTicker').value.trim().toUpperCase();
+        if (!raw) return alert('Masukkan ticker');
+
+        let ticker = raw;
+        if (!ticker.includes('.') && /^[A-Z]{4}$/.test(ticker)) {
+            ticker += '.JK';
+        }
+
+        const btn = document.getElementById('saBtn');
+        const loadEl = document.getElementById('saLoading');
+        const errEl = document.getElementById('saError');
+        const resEl = document.getElementById('saResults');
+        const emptyEl = document.getElementById('saEmpty');
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Analyzing...';
+        loadEl.style.display = 'block';
+        errEl.style.display = 'none';
+        resEl.style.display = 'none';
+        emptyEl.style.display = 'none';
+
+        try {
+            const r = await fetch(`/api/sentiment?ticker=${encodeURIComponent(ticker)}`);
+            const data = await r.json();
+            loadEl.style.display = 'none';
+
+            if (!data.success) {
+                errEl.textContent = '❌ ' + (data.error || 'Unknown error');
+                errEl.style.display = 'block';
+                return;
+            }
+
+            if (!data.articles || data.articles.length === 0) {
+                emptyEl.style.display = 'block';
+                return;
+            }
+
+            resEl.style.display = 'block';
+            renderSentiment(data);
+
+        } catch (err) {
+            loadEl.style.display = 'none';
+            errEl.textContent = '❌ Error: ' + err.message;
+            errEl.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🧠 Analyze';
+        }
+    }
+
+    function renderSentiment(data) {
+        const s = data.sentiment_summary;
+
+        // Score + Verdict
+        const scoreEl = document.getElementById('saScore');
+        const verdictEl = document.getElementById('saVerdict');
+        scoreEl.textContent = s.overall_score.toFixed(3);
+        verdictEl.textContent = s.overall_label.toUpperCase();
+        verdictEl.className = 'sa-gauge__verdict verdict-' + s.overall_label.toLowerCase();
+        scoreEl.className = 'sa-gauge__score verdict-' + s.overall_label.toLowerCase();
+
+        // Model badge
+        document.getElementById('saModel').textContent = '🤖 ' + (data.model_used || 'Unknown');
+
+        // Draw gauge
+        drawGauge(s.overall_score);
+
+        // Stats
+        const stats = [
+            { l: 'Total Articles', v: data.total_articles, c: 'neutral' },
+            { l: 'Bullish', v: s.bullish_count, c: 'up' },
+            { l: 'Bearish', v: s.bearish_count, c: 'down' },
+            { l: 'Neutral', v: s.neutral_count, c: 'neutral' },
+            { l: 'Bullish %', v: s.bullish_pct + '%', c: 'up' },
+            { l: 'Bearish %', v: s.bearish_pct + '%', c: 'down' },
+        ];
+        document.getElementById('saStats').innerHTML = stats.map(i => `
+            <div class="sa-stat">
+                <div class="sa-stat__label">${i.l}</div>
+                <div class="sa-stat__value sa-stat__value--${i.c}">${i.v}</div>
+            </div>
+        `).join('');
+
+        // Distribution bar
+        const distBar = document.getElementById('saDistBar');
+        distBar.innerHTML = '';
+        if (s.bullish_pct > 0) distBar.innerHTML += `<div class="sa-dist-bar__seg sa-dist-bar__seg--bull" style="width:${s.bullish_pct}%">${s.bullish_pct}%</div>`;
+        if (s.bearish_pct > 0) distBar.innerHTML += `<div class="sa-dist-bar__seg sa-dist-bar__seg--bear" style="width:${s.bearish_pct}%">${s.bearish_pct}%</div>`;
+        if (s.neutral_pct > 0) distBar.innerHTML += `<div class="sa-dist-bar__seg sa-dist-bar__seg--neut" style="width:${s.neutral_pct}%">${s.neutral_pct}%</div>`;
+
+        // Source breakdown
+        const srcEl = document.getElementById('saSources');
+        srcEl.innerHTML = Object.entries(data.source_breakdown || {}).map(([src, cnt]) =>
+            `<span class="sa-source-chip">${src}<span class="sa-source-chip__count">${cnt}</span></span>`
+        ).join('');
+
+        // Article count
+        document.getElementById('saArticleCount').textContent = data.total_articles;
+
+        // News feed
+        const feedEl = document.getElementById('saFeed');
+        feedEl.innerHTML = data.articles.map(a => {
+            const label = a.sentiment_label || 'Neutral';
+            const lc = label.toLowerCase();
+            const pillClass = `sa-badge__pill--${lc}`;
+            const score = (a.sentiment_score || 0).toFixed(2);
+            const scoreColor = a.sentiment_score >= 0.1 ? '#10b981' : (a.sentiment_score <= -0.1 ? '#ef4444' : '#9ca3af');
+            const conf = a.confidence || 0;
+            const confColor = conf >= 70 ? '#10b981' : (conf >= 40 ? '#f59e0b' : '#ef4444');
+
+            return `
+            <div class="sa-article">
+                <div>
+                    <div class="sa-article__source">${escHtml(a.source)}</div>
+                    <div class="sa-article__title">
+                        <a href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(a.title)}</a>
+                    </div>
+                    ${a.snippet ? `<div class="sa-article__snippet">${escHtml(a.snippet)}</div>` : ''}
+                    <div class="sa-article__date">${a.published || ''}</div>
+                </div>
+                <div class="sa-badge">
+                    <span class="sa-badge__pill ${pillClass}">${label}</span>
+                    <span class="sa-badge__score" style="color:${scoreColor}">${score}</span>
+                    <div class="sa-conf-bar"><div class="sa-conf-bar__fill" style="width:${conf}%;background:${confColor};"></div></div>
+                    <span class="sa-badge__conf">${conf}% confidence</span>
+                    ${a.reasoning ? `<div class="sa-badge__reasoning" title="${escHtml(a.reasoning)}">${escHtml(a.reasoning.substring(0, 60))}${a.reasoning.length > 60 ? '...' : ''}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function drawGauge(score) {
+        const canvas = document.getElementById('gaugeCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, 160, 90);
+
+        const cx = 80, cy = 85, r = 65;
+        const startAngle = Math.PI;
+        const endAngle = 2 * Math.PI;
+
+        // Background arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, startAngle, endAngle);
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Gradient arc
+        const normalizedScore = (score + 1) / 2; // 0 to 1
+        const scoreAngle = startAngle + normalizedScore * Math.PI;
+
+        const grad = ctx.createLinearGradient(0, cy, 160, cy);
+        grad.addColorStop(0, '#ef4444');
+        grad.addColorStop(0.4, '#f59e0b');
+        grad.addColorStop(0.5, '#6b7280');
+        grad.addColorStop(0.7, '#22d3ee');
+        grad.addColorStop(1, '#10b981');
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, startAngle, scoreAngle);
+        ctx.lineWidth = 12;
+        ctx.strokeStyle = grad;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Needle dot
+        const dotX = cx + r * Math.cos(scoreAngle);
+        const dotY = cy + r * Math.sin(scoreAngle);
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = score >= 0.1 ? '#10b981' : (score <= -0.1 ? '#ef4444' : '#6b7280');
+        ctx.fill();
+    }
+
+    function escHtml(s) {
+        if (!s) return '';
+        const el = document.createElement('div');
+        el.textContent = s;
+        return el.innerHTML;
+    }
+
+    // Enter key triggers search
+    document.getElementById('saTicker').addEventListener('keypress', e => {
+        if (e.key === 'Enter') analyzeSentiment();
+    });
+</script>
+{% endblock %}
