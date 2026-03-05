@@ -12,6 +12,7 @@ dump_keys.txt
 
 # Dev-only scripts and outputs
 scripts/
+frontend/
 
 # Vercel
 .vercel/

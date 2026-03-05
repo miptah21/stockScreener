@@ -333,7 +333,7 @@
     <div class="bt-header">
         <div class="bt-header__badge">● 🔬 BACKTESTING ENGINE</div>
         <h1 class="bt-header__title">Strategy Backtester</h1>
-        <p class="bt-header__subtitle">Uji strategi trading pada data historis IDX dengan VectorBT</p>
+        <p class="bt-header__subtitle">Uji strategi trading pada data historis saham IDX, internasional, dan indeks dengan VectorBT</p>
     </div>
 
     <div class="bt-layout">
@@ -342,8 +342,8 @@
             <div class="bt-panel__title">⚙️ Strategy Builder</div>
 
             <div class="bt-field">
-                <label class="bt-field__label">Ticker <small style="color:var(--text-sec); font-weight:normal;">(Bisa multi-ticker, pisahkan dengan koma)</small></label>
-                <input type="text" class="bt-field__input" id="btTicker" placeholder="BBCA, BMRI" value="BBCA">
+                <label class="bt-field__label">Ticker <small style="color:var(--text-sec); font-weight:normal;">(Saham IDX/Intl/Indeks, pisahkan koma)</small></label>
+                <input type="text" class="bt-field__input" id="btTicker" placeholder="BBCA, AAPL, IHSG, SPX" value="BBCA">
             </div>
 
             <div class="bt-field">
@@ -503,7 +503,7 @@ def custom_strategy(hist):
 
             <div class="bt-field__row">
                 <div class="bt-field">
-                    <label class="bt-field__label">Modal (Rp)</label>
+                    <label class="bt-field__label">Modal Awal</label>
                     <input type="number" class="bt-field__input" id="btCapital" value="100000000" min="1000000" step="1000000">
                 </div>
                 <div class="bt-field">
@@ -544,11 +544,11 @@ def custom_strategy(hist):
 
                 <!-- Equity Curve + Benchmark -->
                 <div class="bt-chart-card">
-                    <div class="bt-chart-card__title">📈 Equity Curve vs IHSG Benchmark</div>
+                    <div class="bt-chart-card__title" id="equityChartTitle">📈 Equity Curve vs Benchmark</div>
                     <canvas id="equityChart" height="220"></canvas>
                     <div class="bt-chart-card__legend">
                         <span class="legend-equity">Strategy Equity</span>
-                        <span class="legend-benchmark">IHSG Benchmark</span>
+                        <span class="legend-benchmark" id="benchmarkLegend">Benchmark</span>
                     </div>
                 </div>
 
@@ -656,7 +656,13 @@ def custom_strategy(hist):
         }
     }
 
-    function fmtRp(n) { return n == null ? '—' : 'Rp ' + Math.round(n).toLocaleString('id-ID'); }
+    let currentCurrency = 'IDR';
+
+    function fmtMoney(n) {
+        if (n == null) return '—';
+        if (currentCurrency === 'IDR') return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+        return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
 
     function destroyChart(key) {
         if (charts[key]) { charts[key].destroy(); charts[key] = null; }
@@ -708,6 +714,13 @@ def custom_strategy(hist):
             if (data.message) { msgEl.textContent = 'ℹ️ ' + data.message; msgEl.style.display = 'block'; }
 
             resultsEl.style.display = 'block';
+
+            // Set currency and benchmark label
+            currentCurrency = data.currency || 'IDR';
+            const bmName = data.benchmark_name || 'Benchmark';
+            document.getElementById('equityChartTitle').textContent = '📈 Equity Curve' + (bmName ? ` vs ${bmName} Benchmark` : '');
+            document.getElementById('benchmarkLegend').textContent = bmName || 'Benchmark';
+
             renderMetrics(data.summary);
             renderEquityCurve(data.equity_curve, data.benchmark_curve);
             renderPriceChart(data.price_data, data.trades || []);
@@ -760,7 +773,7 @@ def custom_strategy(hist):
         // Add benchmark if available
         if (bm && bm.dates && bm.dates.length > 0) {
             datasets.push({
-                label: 'IHSG',
+                label: document.getElementById('benchmarkLegend')?.textContent || 'Benchmark',
                 data: bm.values,
                 borderColor: '#6b7280',
                 borderWidth: 1.5,
@@ -777,7 +790,7 @@ def custom_strategy(hist):
             data: { labels, datasets },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtRp(c.raw) } } },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtMoney(c.raw) } } },
                 scales: {
                     x: { ticks: { color: '#6b7280', maxTicksLimit: 10, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
                     y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => (v/1e6).toFixed(0)+'M' }, grid: { color: 'rgba(255,255,255,0.03)' } },

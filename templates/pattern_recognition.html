@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pattern Recognition — Candlestick & Chart Pattern Scanner</title>
+    <meta name="description" content="Analisis pola candlestick, chart pattern, dan level support/resistance secara otomatis menggunakan algoritma deteksi canggih.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.06);
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-blue: #6366f1;
+            --accent-emerald: #10b981;
+            --accent-cyan: #22d3ee;
+            --accent-rose: #f43f5e;
+            --accent-amber: #f59e0b;
+            --accent-purple: #a855f7;
+            --gradient-primary: linear-gradient(135deg, #6366f1, #a855f7);
+            --gradient-bullish: linear-gradient(135deg, #10b981, #22d3ee);
+            --gradient-bearish: linear-gradient(135deg, #f43f5e, #f59e0b);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --shadow-glow: 0 4px 20px rgba(99, 102, 241, 0.15);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: 
+                radial-gradient(circle at 30% 20%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 70% 80%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.04) 0%, transparent 50%);
+            z-index: 0;
+            animation: bgPulse 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgPulse {
+            0% { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.05) rotate(2deg); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Nav */
+        .nav {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 0; border-bottom: 1px solid var(--glass-border);
+            flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+        }
+        .nav__brand {
+            font-size: 18px; font-weight: 700;
+            background: var(--gradient-primary); -webkit-background-clip: text;
+            background-clip: text; -webkit-text-fill-color: transparent; text-decoration: none;
+        }
+        .nav__links { display: flex; gap: 8px; flex-wrap: wrap; }
+        .nav__link {
+            padding: 8px 20px; border-radius: 100px; font-size: 13px; font-weight: 500;
+            text-decoration: none; transition: var(--transition);
+        }
+        .nav__link--default { color: var(--text-secondary); border: 1px solid transparent; }
+        .nav__link--default:hover { color: var(--text-primary); background: var(--glass); border-color: var(--glass-border); }
+        .nav__link--active { background: var(--gradient-primary); color: white; border: 1px solid transparent; }
+
+        /* Dropdowns */
+        .nav__dropdown { position: relative; display: inline-block; }
+        .nav__dropdown-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+        .nav__dropdown-menu {
+            position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(10px);
+            background: var(--bg-secondary); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm); padding: 8px; min-width: 180px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), var(--shadow-glow);
+            backdrop-filter: blur(20px); opacity: 0; visibility: hidden;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 9999;
+        }
+        .nav__dropdown:hover .nav__dropdown-menu, .nav__dropdown:focus-within .nav__dropdown-menu {
+            opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+        }
+        .nav__dropdown-arrow { display: inline-block; transition: transform 0.2s; font-size: 10px; }
+        .nav__dropdown:hover .nav__dropdown-arrow { transform: rotate(180deg); }
+        .nav__dropdown-item {
+            display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+            color: var(--text-secondary); text-decoration: none; font-size: 13px; font-weight: 500;
+            border-radius: 8px; transition: var(--transition);
+        }
+        .nav__dropdown-item:hover { background: var(--glass); color: var(--text-primary); }
+        .nav__dropdown-item--active { background: rgba(99, 102, 241, 0.1); color: var(--accent-blue); font-weight: 600; }
+
+        /* Header */
+        .header { text-align: center; padding: 40px 0 20px; }
+        .header h1 {
+            font-size: 38px; font-weight: 800; margin-bottom: 12px;
+            background: linear-gradient(135deg, #f1f5f9, #94a3b8);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header p { color: var(--text-secondary); font-size: 15px; line-height: 1.6; max-width: 700px; margin: 0 auto; }
+
+        /* Search */
+        .search-panel {
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: var(--radius); padding: 24px; margin: 24px 0;
+            display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+        }
+        .search-group { flex: 1; min-width: 250px; }
+        .search-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; display: block; }
+        .search-input {
+            width: 100%; padding: 12px 16px; background: var(--glass);
+            border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+            color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 14px;
+            transition: var(--transition);
+        }
+        .search-input::placeholder { color: var(--text-muted); }
+        .search-input:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); outline: none; }
+        .analyze-btn {
+            padding: 12px 36px; background: var(--gradient-primary); border: none;
+            border-radius: var(--radius-sm); color: white; font-family: 'Inter', sans-serif;
+            font-size: 14px; font-weight: 600; cursor: pointer; transition: var(--transition);
+            white-space: nowrap;
+        }
+        .analyze-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(99, 102, 241, 0.35); }
+        .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* Loading */
+        .loading { display: none; text-align: center; padding: 60px 0; }
+        .loading.active { display: block; }
+        .loading-spinner {
+            width: 40px; height: 40px; border: 3px solid var(--glass-border);
+            border-top-color: var(--accent-blue); border-radius: 50%;
+            animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: var(--text-secondary); font-size: 14px; }
+
+        /* Error */
+        .error-box {
+            display: none; max-width: 600px; margin: 20px auto; padding: 16px 20px;
+            background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.2);
+            border-radius: var(--radius-sm); color: var(--accent-rose); font-size: 14px; text-align: center;
+        }
+        .error-box.active { display: block; }
+
+        /* Results Container */
+        .results { display: none; padding-bottom: 60px; }
+        .results.active { display: block; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Section Title */
+        .section-title {
+            font-size: 13px; font-weight: 600; color: var(--text-secondary);
+            margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.8px;
+        }
+
+        /* Ticker Info */
+        .ticker-info {
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: var(--radius); padding: 24px; margin-bottom: 24px;
+            display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+        }
+        .ticker-info__symbol { font-size: 28px; font-weight: 800; color: var(--accent-cyan); }
+        .ticker-info__name { font-size: 15px; color: var(--text-secondary); }
+        .ticker-info__price { font-size: 22px; font-weight: 700; margin-left: auto; }
+
+        /* Signal Summary */
+        .signal-summary {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px; margin-bottom: 28px;
+        }
+        .signal-card {
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm); padding: 18px; text-align: center;
+            transition: var(--transition);
+        }
+        .signal-card:hover { border-color: rgba(99, 102, 241, 0.2); transform: translateY(-2px); }
+        .signal-card__value { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+        .signal-card__label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .signal-card--bullish .signal-card__value { color: var(--accent-emerald); }
+        .signal-card--bearish .signal-card__value { color: var(--accent-rose); }
+        .signal-card--neutral .signal-card__value { color: var(--text-muted); }
+        .signal-card--zone .signal-card__value { color: var(--accent-cyan); font-size: 16px; }
+
+        /* Pattern Grid */
+        .pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 32px; }
+        .pattern-card {
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm); padding: 18px; transition: var(--transition);
+            position: relative; overflow: hidden;
+        }
+        .pattern-card:hover { border-color: rgba(99, 102, 241, 0.3); transform: translateY(-3px); box-shadow: var(--shadow-glow); }
+        .pattern-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        }
+        .pattern-card--bullish::before { background: var(--gradient-bullish); }
+        .pattern-card--bearish::before { background: var(--gradient-bearish); }
+        .pattern-card--neutral::before { background: linear-gradient(135deg, #64748b, #94a3b8); }
+        .pattern-card__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .pattern-card__name { font-size: 14px; font-weight: 700; }
+        .pattern-card__signal {
+            display: inline-block; padding: 3px 10px; border-radius: 100px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+        }
+        .pattern-card__signal--bullish { background: rgba(16, 185, 129, 0.12); color: var(--accent-emerald); }
+        .pattern-card__signal--bearish { background: rgba(244, 63, 94, 0.12); color: var(--accent-rose); }
+        .pattern-card__signal--neutral { background: rgba(100, 116, 139, 0.12); color: var(--text-secondary); }
+        .pattern-card__stars { color: var(--accent-amber); font-size: 12px; margin: 6px 0; }
+        .pattern-card__desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+        /* Chart Pattern Cards */
+        .chart-pattern-card {
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm); padding: 20px; transition: var(--transition);
+        }
+        .chart-pattern-card:hover { border-color: rgba(99, 102, 241, 0.3); transform: translateY(-2px); }
+        .chart-pattern-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-bottom: 32px; }
+        .chart-pattern-card__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .chart-pattern-card__title { font-size: 16px; font-weight: 700; }
+        .confidence-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 12px; border-radius: 100px; font-size: 11px; font-weight: 700;
+        }
+        .confidence-badge--high { background: rgba(16, 185, 129, 0.12); color: var(--accent-emerald); }
+        .confidence-badge--medium { background: rgba(245, 158, 11, 0.12); color: var(--accent-amber); }
+        .confidence-badge--low { background: rgba(100, 116, 139, 0.12); color: var(--text-secondary); }
+        .chart-pattern-card__detail {
+            display: flex; justify-content: space-between; padding: 6px 0;
+            font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .chart-pattern-card__detail:last-child { border-bottom: none; }
+        .detail-label { color: var(--text-muted); }
+        .detail-value { color: var(--text-primary); font-weight: 600; }
+
+        /* S/R Level Scale */
+        .sr-container {
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: var(--radius); padding: 24px; margin-bottom: 32px;
+        }
+        .sr-scale { position: relative; padding: 20px 0; }
+        .sr-level {
+            display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+            border-radius: var(--radius-sm); margin-bottom: 4px; transition: var(--transition);
+        }
+        .sr-level:hover { background: var(--bg-card-hover); }
+        .sr-level__type {
+            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+            width: 80px; flex-shrink: 0;
+        }
+        .sr-level__type--resistance { color: var(--accent-rose); }
+        .sr-level__type--support { color: var(--accent-emerald); }
+        .sr-level__type--price { color: var(--accent-cyan); }
+        .sr-level__price { font-size: 15px; font-weight: 700; width: 100px; }
+        .sr-level__bar-wrap { flex: 1; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; }
+        .sr-level__bar { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .sr-level__bar--resistance { background: linear-gradient(90deg, rgba(244,63,94,0.3), var(--accent-rose)); }
+        .sr-level__bar--support { background: linear-gradient(90deg, rgba(16,185,129,0.3), var(--accent-emerald)); }
+        .sr-level__bar--price { background: var(--gradient-primary); }
+        .sr-level__info { font-size: 11px; color: var(--text-muted); width: 120px; text-align: right; }
+        .sr-current-price {
+            background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: var(--radius-sm);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px;
+        }
+        .empty-state__icon { font-size: 40px; margin-bottom: 12px; }
+
+        /* Footer */
+        .footer { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--glass-border); }
+        .footer a { color: var(--accent-blue); text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 24px; }
+            .search-panel { flex-direction: column; }
+            .search-group { min-width: 100%; }
+            .ticker-info { flex-direction: column; text-align: center; }
+            .ticker-info__price { margin-left: 0; }
+            .pattern-grid { grid-template-columns: 1fr; }
+            .chart-pattern-grid { grid-template-columns: 1fr; }
+            .sr-level__bar-wrap { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Nav -->
+    <nav class="nav">
+        <a href="/" class="nav__brand">📊 Finance Scraper</a>
+        <div class="nav__links">
+            <a href="/" class="nav__link nav__link--default">Dashboard</a>
+            
+            <!-- Screener Dropdown -->
+            <div class="nav__dropdown">
+                <div class="nav__link nav__link--active nav__dropdown-toggle">
+                    🔍 Screeners <span class="nav__dropdown-arrow">▼</span>
+                </div>
+                <div class="nav__dropdown-menu">
+                    <a href="/screening" class="nav__dropdown-item">Fundamental Scrn</a>
+                    <a href="/technical-screening" class="nav__dropdown-item">Technical Scrn</a>
+                    <a href="/simple-screening" class="nav__dropdown-item">RSI & MACD</a>
+                    <a href="/pattern-recognition" class="nav__dropdown-item nav__dropdown-item--active">🔮 Patterns</a>
+                </div>
+            </div>
+
+            <!-- Data Dropdown -->
+            <div class="nav__dropdown">
+                <div class="nav__link nav__link--default nav__dropdown-toggle">
+                    📊 Data <span class="nav__dropdown-arrow">▼</span>
+                </div>
+                <div class="nav__dropdown-menu">
+                    <a href="/avg-price" class="nav__dropdown-item">Rata-Rata Harga</a>
+                    <a href="/ownership" class="nav__dropdown-item">Ownership</a>
+                    <a href="/market-overview" class="nav__dropdown-item">Market Overview</a>
+                    <a href="/compare" class="nav__dropdown-item">📊 Compare</a>
+                </div>
+            </div>
+
+            <a href="/backtest" class="nav__link nav__link--default">🔬 Backtest</a>
+            <a href="/watchlist" class="nav__link nav__link--default">⭐ Watchlist</a>
+            <a href="/sentiment" class="nav__link nav__link--default">🧠 Sentimen</a>
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="header">
+        <h1>🔮 Pattern Recognition Scanner</h1>
+        <p>Deteksi otomatis <strong>16 pola candlestick</strong>, <strong>6 chart pattern</strong>, dan <strong>level support/resistance</strong> menggunakan algoritma deteksi canggih berbasis scipy.</p>
+    </header>
+
+    <!-- Search -->
+    <section class="search-panel">
+        <div class="search-group">
+            <label class="search-label">Kode Saham / Indeks</label>
+            <input type="text" id="tickerInput" class="search-input" 
+                   placeholder="Cth: BBCA.JK, AAPL, IHSG, ^JKSE, LQ45, SPX"
+                   onkeydown="if(event.key==='Enter')analyzePattern()">
+        </div>
+        <button id="analyzeBtn" class="analyze-btn" onclick="analyzePattern()">🔮 Analisis Pola</button>
+    </section>
+
+    <!-- Loading -->
+    <div id="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Menganalisis pola candlestick, chart pattern, dan level S/R...</p>
+    </div>
+
+    <!-- Error -->
+    <div id="errorBox" class="error-box"></div>
+
+    <!-- Results -->
+    <div id="results" class="results">
+        <!-- Ticker Info -->
+        <div id="tickerInfo" class="ticker-info"></div>
+
+        <!-- Signal Summary -->
+        <div class="section-title">📊 Ringkasan Sinyal</div>
+        <div id="signalSummary" class="signal-summary"></div>
+
+        <!-- Candlestick Patterns -->
+        <div class="section-title">🕯️ Pola Candlestick Terdeteksi</div>
+        <div id="candlestickPatterns" class="pattern-grid"></div>
+
+        <!-- Chart Patterns -->
+        <div class="section-title">📐 Chart Pattern Terdeteksi</div>
+        <div id="chartPatterns" class="chart-pattern-grid"></div>
+
+        <!-- Support & Resistance -->
+        <div class="section-title">📏 Level Support & Resistance</div>
+        <div id="srLevels" class="sr-container"></div>
+    </div>
+
+    <footer class="footer">
+        <p>Data sourced from <a href="https://finance.yahoo.com" target="_blank">Yahoo Finance</a>. Data may be delayed.</p>
+        <p style="margin-top: 6px;">Pattern: Candlestick (16 pola) · Chart Pattern (6 pola) · Support/Resistance · © 2026</p>
+    </footer>
+</div>
+
+<script>
+    async function analyzePattern() {
+        const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
+        if (!ticker) { showError('Masukkan kode saham terlebih dahulu.'); return; }
+
+        const btn = document.getElementById('analyzeBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Menganalisis...';
+        hideError();
+        document.getElementById('results').classList.remove('active');
+        document.getElementById('loading').classList.add('active');
+
+        try {
+            const r = await fetch(`/api/patterns?ticker=${encodeURIComponent(ticker)}`);
+            const data = await r.json();
+
+            if (!data.success) {
+                showError(data.error || 'Gagal menganalisis pola.');
+                return;
+            }
+
+            renderResults(data);
+        } catch (e) {
+            showError('Gagal terhubung ke server.');
+            console.error(e);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔮 Analisis Pola';
+            document.getElementById('loading').classList.remove('active');
+        }
+    }
+
+    function renderResults(data) {
+        // Ticker Info
+        document.getElementById('tickerInfo').innerHTML = `
+            <div>
+                <div class="ticker-info__symbol">${data.ticker}</div>
+                <div class="ticker-info__name">${data.company_name}</div>
+            </div>
+            <div class="ticker-info__price" style="margin-left:auto;">
+                ${data.price ? formatPrice(data.price, data.currency) : '—'}
+            </div>
+        `;
+
+        // Signal Summary
+        const summary = data.pattern_summary || {};
+        const zone = data.current_zone_label || 'N/A';
+        document.getElementById('signalSummary').innerHTML = `
+            <div class="signal-card signal-card--bullish">
+                <div class="signal-card__value">${summary.bullish_count || 0}</div>
+                <div class="signal-card__label">Pola Bullish</div>
+            </div>
+            <div class="signal-card signal-card--bearish">
+                <div class="signal-card__value">${summary.bearish_count || 0}</div>
+                <div class="signal-card__label">Pola Bearish</div>
+            </div>
+            <div class="signal-card signal-card--neutral">
+                <div class="signal-card__value">${summary.neutral_count || 0}</div>
+                <div class="signal-card__label">Pola Netral</div>
+            </div>
+            <div class="signal-card signal-card--zone">
+                <div class="signal-card__value">${zone}</div>
+                <div class="signal-card__label">Zona Harga</div>
+            </div>
+        `;
+
+        // Candlestick Patterns
+        const cp = data.candlestick_patterns || [];
+        if (cp.length === 0) {
+            document.getElementById('candlestickPatterns').innerHTML = `
+                <div class="empty-state" style="grid-column:1/-1;">
+                    <div class="empty-state__icon">🕯️</div>
+                    <p>Tidak ada pola candlestick terdeteksi pada candle terakhir.</p>
+                </div>
+            `;
+        } else {
+            document.getElementById('candlestickPatterns').innerHTML = cp.map(p => `
+                <div class="pattern-card pattern-card--${p.signal}">
+                    <div class="pattern-card__header">
+                        <span class="pattern-card__name">${p.name}</span>
+                        <span class="pattern-card__signal pattern-card__signal--${p.signal}">${p.signal}</span>
+                    </div>
+                    <div class="pattern-card__stars">${'⭐'.repeat(p.strength)}</div>
+                    <div class="pattern-card__desc">${p.description}</div>
+                </div>
+            `).join('');
+        }
+
+        // Chart Patterns
+        const charts = data.chart_patterns || [];
+        if (charts.length === 0) {
+            document.getElementById('chartPatterns').innerHTML = `
+                <div class="empty-state" style="grid-column:1/-1;">
+                    <div class="empty-state__icon">📐</div>
+                    <p>Tidak ada chart pattern terdeteksi dalam 6 bulan terakhir.</p>
+                </div>
+            `;
+        } else {
+            document.getElementById('chartPatterns').innerHTML = charts.map(p => {
+                const confClass = p.confidence >= 70 ? 'high' : p.confidence >= 40 ? 'medium' : 'low';
+                let details = `<div class="chart-pattern-card__detail"><span class="detail-label">Sinyal</span><span class="detail-value" style="color:${p.signal === 'bullish' ? 'var(--accent-emerald)' : 'var(--accent-rose)'}">${p.signal.toUpperCase()}</span></div>`;
+                if (p.neckline) details += `<div class="chart-pattern-card__detail"><span class="detail-label">Neckline</span><span class="detail-value">${formatNum(p.neckline)}</span></div>`;
+                if (p.target_price) details += `<div class="chart-pattern-card__detail"><span class="detail-label">Target</span><span class="detail-value">${formatNum(p.target_price)}</span></div>`;
+                if (p.resistance) details += `<div class="chart-pattern-card__detail"><span class="detail-label">Resistance</span><span class="detail-value">${formatNum(p.resistance)}</span></div>`;
+                if (p.support) details += `<div class="chart-pattern-card__detail"><span class="detail-label">Support</span><span class="detail-value">${formatNum(p.support)}</span></div>`;
+                return `
+                    <div class="chart-pattern-card">
+                        <div class="chart-pattern-card__header">
+                            <span class="chart-pattern-card__title">${p.name}</span>
+                            <span class="confidence-badge confidence-badge--${confClass}">${p.confidence}%</span>
+                        </div>
+                        ${details}
+                        <div style="margin-top:10px;font-size:12px;color:var(--text-muted);">${p.description}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Support & Resistance
+        const supports = data.support_levels || [];
+        const resistances = data.resistance_levels || [];
+        const currentPrice = data.current_price || data.price;
+
+        if (supports.length === 0 && resistances.length === 0) {
+            document.getElementById('srLevels').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state__icon">📏</div>
+                    <p>Level support/resistance tidak dapat ditentukan.</p>
+                </div>
+            `;
+        } else {
+            let srHtml = '<div class="sr-scale">';
+
+            // Resistances (sorted ascending, display top-down)
+            const sortedRes = [...resistances].sort((a, b) => b.price - a.price);
+            sortedRes.forEach(level => {
+                srHtml += renderSRLevel(level, 'resistance');
+            });
+
+            // Current Price
+            if (currentPrice) {
+                srHtml += `
+                    <div class="sr-level sr-current-price">
+                        <span class="sr-level__type sr-level__type--price">► HARGA</span>
+                        <span class="sr-level__price" style="color:var(--accent-cyan);">${formatNum(currentPrice)}</span>
+                        <div class="sr-level__bar-wrap"><div class="sr-level__bar sr-level__bar--price" style="width:100%;"></div></div>
+                        <span class="sr-level__info" style="color:var(--accent-cyan);">Harga Saat Ini</span>
+                    </div>
+                `;
+            }
+
+            // Supports (sorted descending)
+            const sortedSup = [...supports].sort((a, b) => b.price - a.price);
+            sortedSup.forEach(level => {
+                srHtml += renderSRLevel(level, 'support');
+            });
+
+            srHtml += '</div>';
+            document.getElementById('srLevels').innerHTML = srHtml;
+        }
+
+        document.getElementById('results').classList.add('active');
+    }
+
+    function renderSRLevel(level, type) {
+        const barWidth = Math.min(100, level.strength);
+        const typeLabel = type === 'resistance' ? 'RESISTANCE' : 'SUPPORT';
+        return `
+            <div class="sr-level">
+                <span class="sr-level__type sr-level__type--${type}">${typeLabel}</span>
+                <span class="sr-level__price">${formatNum(level.price)}</span>
+                <div class="sr-level__bar-wrap">
+                    <div class="sr-level__bar sr-level__bar--${type}" style="width:${barWidth}%;"></div>
+                </div>
+                <span class="sr-level__info">Strength: ${level.strength} · ${level.touches} sentuh</span>
+            </div>
+        `;
+    }
+
+    function formatPrice(price, currency) {
+        if (currency === 'IDR') return 'Rp ' + price.toLocaleString('id-ID');
+        return '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatNum(n) {
+        if (n == null) return '—';
+        return n.toLocaleString('id-ID', { maximumFractionDigits: 2 });
+    }
+
+    function showError(msg) {
+        const el = document.getElementById('errorBox');
+        el.textContent = msg;
+        el.classList.add('active');
+    }
+
+    function hideError() {
+        document.getElementById('errorBox').classList.remove('active');
+    }
+</script>
+
+</body>
+</html>

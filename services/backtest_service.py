@@ -19,6 +19,82 @@ VALID_PERIODS = ['1y', '2y', '3y', '5y']
 # Default IDX broker fees (buy + sell)
 DEFAULT_FEES_PCT = 0.15
 
+# Index aliases (shared with api_data.py)
+INDEX_ALIASES = {
+    'IHSG': '^JKSE',
+    'LQ45': '^JKLQ45',
+    'IDX30': '^JKIDX30',
+    'DJI': '^DJI',
+    'DOWJONES': '^DJI',
+    'SPX': '^GSPC',
+    'SP500': '^GSPC',
+    'NASDAQ': '^IXIC',
+    'IXIC': '^IXIC',
+    'NIKKEI': '^N225',
+    'HSI': '^HSI',
+    'HANGSENG': '^HSI',
+    'STI': '^STI',
+    'KOSPI': '^KS11',
+    'FTSE': '^FTSE',
+    'DAX': '^GDAXI',
+}
+
+# Benchmark mapping: ticker suffix/prefix → benchmark index
+BENCHMARK_MAP = {
+    '.JK': ('^JKSE', 'IHSG'),
+    '.L': ('^FTSE', 'FTSE 100'),
+    '.T': ('^N225', 'Nikkei 225'),
+    '.HK': ('^HSI', 'Hang Seng'),
+    '.KS': ('^KS11', 'KOSPI'),
+    '.SI': ('^STI', 'STI'),
+    '.DE': ('^GDAXI', 'DAX'),
+}
+
+
+def _normalize_ticker(raw: str) -> str:
+    """
+    Normalize a ticker for Yahoo Finance.
+    - Resolve index aliases (IHSG → ^JKSE, SPX → ^GSPC, etc.)
+    - If ticker already has a suffix (.JK, .L, etc.) or starts with ^, use as-is
+    - If ticker looks like a plain IDX ticker (4 uppercase letters), append .JK
+    - Otherwise, use as-is (e.g., AAPL, MSFT, TSLA)
+    """
+    t = raw.strip().upper()
+    # Check index alias first
+    if t in INDEX_ALIASES:
+        return INDEX_ALIASES[t]
+    # Already has suffix or is an index
+    if '.' in t or t.startswith('^'):
+        return t
+    # Heuristic: 4-letter all-alpha tickers are likely IDX
+    if t.isalpha() and len(t) == 4:
+        return f"{t}.JK"
+    # Everything else (AAPL, MSFT, BRK-B, etc.) — use as-is
+    return t
+
+
+def _get_benchmark(ticker: str):
+    """Determine the appropriate benchmark index for a ticker."""
+    upper = ticker.upper()
+    # If the ticker IS an index, no benchmark needed
+    if upper.startswith('^'):
+        return None, None
+    # Match by suffix
+    for suffix, (bm_ticker, bm_name) in BENCHMARK_MAP.items():
+        if upper.endswith(suffix.upper()):
+            return bm_ticker, bm_name
+    # Default: S&P 500 for US/international stocks
+    return '^GSPC', 'S&P 500'
+
+
+def _detect_currency(ticker_obj):
+    """Detect currency from yfinance ticker info."""
+    try:
+        info = ticker_obj.info or {}
+        return info.get('currency', 'USD')
+    except Exception:
+        return 'USD'
+
 
 def _safe_val(v, default=0.0):
     """Safely convert to float, handle NaN/Inf."""
@@ -235,8 +311,7 @@ def run_backtest(ticker, strategy_type, params, period='2y',
 
     try:
         # 1. Fetch historical data for one or multiple tickers
-        tickers = [t.strip().upper() for t in ticker.split(',')]
-        tickers = [t if t.endswith('.JK') else f"{t}.JK" for t in tickers]
+        tickers = [_normalize_ticker(t) for t in ticker.split(',')]
 
         if len(tickers) == 1:
             stock = yf.Ticker(tickers[0])
@@ -383,42 +458,49 @@ def run_backtest(ticker, strategy_type, params, period='2y',
         price_dates = [d.strftime('%Y-%m-%d') for d in price_sampled.index]
         price_values = [round(_safe_val(v), 0) for v in price_sampled.values]
 
-        # 8. Benchmark (IHSG / ^JKSE) — aligned to stock's date range
+        # 8. Benchmark — auto-detect based on ticker market
         benchmark_data = {'dates': [], 'values': []}
+        bm_ticker_sym, bm_name = _get_benchmark(tickers[0])
         try:
-            ihsg = yf.Ticker('^JKSE').history(period=period)
-            if not ihsg.empty and len(ihsg) > 10:
-                # Clip IHSG to match the stock's actual date range
-                stock_start = hist.index.min()
-                stock_end = hist.index.max()
-                # Remove timezone info for comparison if needed
-                if ihsg.index.tz is not None and stock_start.tzinfo is None:
-                    ihsg.index = ihsg.index.tz_localize(None)
-                elif ihsg.index.tz is None and stock_start.tzinfo is not None:
-                    stock_start = stock_start.tz_localize(None)
-                    stock_end = stock_end.tz_localize(None)
-                ihsg_clipped = ihsg.loc[
-                    (ihsg.index >= stock_start) & (ihsg.index <= stock_end)
-                ]
-                if not ihsg_clipped.empty and len(ihsg_clipped) > 5:
-                    # Normalize from the stock's start date
-                    ihsg_norm = (ihsg_clipped['Close'] / ihsg_clipped['Close'].iloc[0]) * initial_capital
-                    if len(ihsg_norm) > 500:
-                        ihsg_sampled = ihsg_norm.iloc[::max(1, len(ihsg_norm) // 500)]
-                    else:
-                        ihsg_sampled = ihsg_norm
-                    benchmark_data = {
-                        'dates': [d.strftime('%Y-%m-%d') for d in ihsg_sampled.index],
-                        'values': [round(_safe_val(v), 0) for v in ihsg_sampled.values],
-                    }
+            if bm_ticker_sym:
+                bm_hist = yf.Ticker(bm_ticker_sym).history(period=period)
+                if not bm_hist.empty and len(bm_hist) > 10:
+                    stock_start = hist.index.min()
+                    stock_end = hist.index.max()
+                    if bm_hist.index.tz is not None and stock_start.tzinfo is None:
+                        bm_hist.index = bm_hist.index.tz_localize(None)
+                    elif bm_hist.index.tz is None and stock_start.tzinfo is not None:
+                        stock_start = stock_start.tz_localize(None)
+                        stock_end = stock_end.tz_localize(None)
+                    bm_clipped = bm_hist.loc[
+                        (bm_hist.index >= stock_start) & (bm_hist.index <= stock_end)
+                    ]
+                    if not bm_clipped.empty and len(bm_clipped) > 5:
+                        bm_norm = (bm_clipped['Close'] / bm_clipped['Close'].iloc[0]) * initial_capital
+                        if len(bm_norm) > 500:
+                            bm_sampled = bm_norm.iloc[::max(1, len(bm_norm) // 500)]
+                        else:
+                            bm_sampled = bm_norm
+                        benchmark_data = {
+                            'dates': [d.strftime('%Y-%m-%d') for d in bm_sampled.index],
+                            'values': [round(_safe_val(v), 0) for v in bm_sampled.values],
+                        }
         except Exception:
             pass  # Non-critical, skip if fails
+
+        # Detect currency for display
+        try:
+            currency = _detect_currency(yf.Ticker(tickers[0]))
+        except Exception:
+            currency = 'IDR'
 
         # 9. Trade log
         trade_log = _extract_trades(portfolio)
 
         return {
             'success': True,
+            'currency': currency,
+            'benchmark_name': bm_name,
             'summary': {
                 'total_return_pct': float(round(total_return, 2)),
                 'win_rate': float(round(win_rate, 2)),
@@ -496,9 +578,7 @@ def run_optimization(ticker, strategy_type, param_ranges, period='2y',
         if len(tickers) > 1:
             return {'success': False, 'error': 'Optimasi saat ini hanya mendukung Single Ticker.'}
             
-        clean_ticker = tickers[0]
-        if not clean_ticker.endswith('.JK'):
-            clean_ticker += '.JK'
+        clean_ticker = _normalize_ticker(tickers[0])
 
         stock = yf.Ticker(clean_ticker)
         try:
@@ -651,9 +731,7 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
         if len(tickers) > 1:
             return {'success': False, 'error': 'Walk-Forward saat ini hanya mendukung Single Ticker.'}
             
-        clean_ticker = tickers[0]
-        if not clean_ticker.endswith('.JK'):
-            clean_ticker += '.JK'
+        clean_ticker = _normalize_ticker(tickers[0])
 
         stock = yf.Ticker(clean_ticker)
         try:

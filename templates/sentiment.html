@@ -357,6 +357,83 @@
         color: var(--text-primary);
         margin-bottom: 12px;
     }
+
+    /* ── AI Insight Card ── */
+    .sa-insight {
+        background: var(--glass-bg);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        backdrop-filter: blur(20px);
+        position: relative;
+        overflow: hidden;
+    }
+    .sa-insight::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #8b5cf6, #22d3ee, #10b981);
+    }
+    .sa-insight__header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+    .sa-insight__title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #a78bfa;
+    }
+    .sa-insight__summary {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--text-primary);
+        margin-bottom: 16px;
+    }
+    .sa-insight__section {
+        margin-bottom: 12px;
+    }
+    .sa-insight__section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+    }
+    .sa-insight__tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .sa-insight__tag {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .sa-insight__tag--driver {
+        background: rgba(34, 211, 238, 0.12);
+        color: #22d3ee;
+        border: 1px solid rgba(34, 211, 238, 0.2);
+    }
+    .sa-insight__tag--risk {
+        background: rgba(239, 68, 68, 0.1);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .sa-insight__outlook {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--text-secondary);
+        padding: 12px 16px;
+        background: rgba(139, 92, 246, 0.06);
+        border-radius: 10px;
+        border-left: 3px solid #a78bfa;
+    }
 </style>
 {% endblock %}
 
@@ -369,7 +446,7 @@
 
     <!-- Search Bar -->
     <div class="sa-search">
-        <input type="text" class="sa-search__input" id="saTicker" placeholder="Masukkan ticker (contoh: BBCA, AAPL)" value="">
+        <input type="text" class="sa-search__input" id="saTicker" placeholder="Masukkan ticker (contoh: BBCA, AAPL, IHSG, SPX)" value="">
         <button class="sa-search__btn" id="saBtn" onclick="analyzeSentiment()">🧠 Analyze</button>
     </div>
 
@@ -419,6 +496,9 @@
             </div>
         </div>
 
+        <!-- AI Insight -->
+        <div id="saInsight" style="display:none;"></div>
+
         <!-- Source Breakdown -->
         <div id="saSources" class="sa-sources"></div>
 
@@ -436,8 +516,15 @@
         const raw = document.getElementById('saTicker').value.trim().toUpperCase();
         if (!raw) return alert('Masukkan ticker');
 
-        let ticker = raw;
-        if (!ticker.includes('.') && /^[A-Z]{4}$/.test(ticker)) {
+        const INDEX_ALIASES = {
+            'IHSG': '^JKSE', 'LQ45': '^JKLQ45', 'IDX30': '^JKIDX30',
+            'DJI': '^DJI', 'DOWJONES': '^DJI', 'SPX': '^GSPC', 'SP500': '^GSPC',
+            'NASDAQ': '^IXIC', 'IXIC': '^IXIC', 'NIKKEI': '^N225',
+            'HSI': '^HSI', 'HANGSENG': '^HSI', 'STI': '^STI', 'KOSPI': '^KS11',
+            'FTSE': '^FTSE', 'DAX': '^GDAXI',
+        };
+        let ticker = INDEX_ALIASES[raw] || raw;
+        if (!ticker.includes('.') && !ticker.startsWith('^') && /^[A-Z]{4}$/.test(ticker)) {
             ticker += '.JK';
         }
 
@@ -529,6 +616,9 @@
             `<span class="sa-source-chip">${src}<span class="sa-source-chip__count">${cnt}</span></span>`
         ).join('');
 
+        // AI Insight
+        renderInsight(data.insight);
+
         // Article count
         document.getElementById('saArticleCount').textContent = data.total_articles;
 
@@ -551,7 +641,7 @@
                         <a href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(a.title)}</a>
                     </div>
                     ${a.snippet ? `<div class="sa-article__snippet">${escHtml(a.snippet)}</div>` : ''}
-                    <div class="sa-article__date">${a.published || ''}</div>
+                    <div class="sa-article__date">${relativeTime(a.published)}</div>
                 </div>
                 <div class="sa-badge">
                     <span class="sa-badge__pill ${pillClass}">${label}</span>
@@ -562,6 +652,68 @@
                 </div>
             </div>`;
         }).join('');
+    }
+
+    function renderInsight(insight) {
+        const el = document.getElementById('saInsight');
+        if (!insight || !insight.summary) {
+            el.style.display = 'none';
+            return;
+        }
+
+        const drivers = (insight.key_drivers || []).map(d =>
+            `<span class="sa-insight__tag sa-insight__tag--driver">📈 ${escHtml(d)}</span>`
+        ).join('');
+
+        const risks = (insight.risk_factors || []).map(r =>
+            `<span class="sa-insight__tag sa-insight__tag--risk">⚠️ ${escHtml(r)}</span>`
+        ).join('');
+
+        el.innerHTML = `
+            <div class="sa-insight">
+                <div class="sa-insight__header">
+                    <span style="font-size:20px;">🧠</span>
+                    <span class="sa-insight__title">AI Market Insight</span>
+                </div>
+                <div class="sa-insight__summary">${escHtml(insight.summary)}</div>
+                ${drivers ? `
+                    <div class="sa-insight__section">
+                        <div class="sa-insight__section-title">📊 Key Drivers</div>
+                        <div class="sa-insight__tags">${drivers}</div>
+                    </div>
+                ` : ''}
+                ${risks ? `
+                    <div class="sa-insight__section">
+                        <div class="sa-insight__section-title">⚠️ Risk Factors</div>
+                        <div class="sa-insight__tags">${risks}</div>
+                    </div>
+                ` : ''}
+                ${insight.outlook ? `
+                    <div class="sa-insight__section">
+                        <div class="sa-insight__section-title">🔮 Outlook</div>
+                        <div class="sa-insight__outlook">${escHtml(insight.outlook)}</div>
+                    </div>
+                ` : ''}
+            </div>`;
+        el.style.display = 'block';
+    }
+
+    function relativeTime(dateStr) {
+        if (!dateStr) return '';
+        try {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return dateStr;
+            const now = new Date();
+            const diffMs = now - d;
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHr = Math.floor(diffMs / 3600000);
+            const diffDay = Math.floor(diffMs / 86400000);
+            if (diffMin < 1) return 'Baru saja';
+            if (diffMin < 60) return `${diffMin} menit lalu`;
+            if (diffHr < 24) return `${diffHr} jam lalu`;
+            if (diffDay < 7) return `${diffDay} hari lalu`;
+            return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        } catch { return dateStr; }
     }
 
     function drawGauge(score) {

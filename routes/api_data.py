@@ -22,7 +22,32 @@ from scrapers.bandarmology import get_broker_summary, calculate_bandar_flow
 logger = logging.getLogger(__name__)
 
 # ─── Input Validation ────────────────────────────────────────────────
-TICKER_PATTERN = re.compile(r'^[A-Za-z0-9.\-]{1,15}$')
+TICKER_PATTERN = re.compile(r'^[\^A-Za-z0-9.\-]{1,15}$')
+
+# ─── Index Aliases ───────────────────────────────────────────────────
+INDEX_ALIASES = {
+    'IHSG': '^JKSE',
+    'LQ45': '^JKLQ45',
+    'IDX30': '^JKIDX30',
+    'DJI': '^DJI',
+    'DOWJONES': '^DJI',
+    'SPX': '^GSPC',
+    'SP500': '^GSPC',
+    'NASDAQ': '^IXIC',
+    'IXIC': '^IXIC',
+    'NIKKEI': '^N225',
+    'HSI': '^HSI',
+    'HANGSENG': '^HSI',
+    'STI': '^STI',
+    'KOSPI': '^KS11',
+    'FTSE': '^FTSE',
+    'DAX': '^GDAXI',
+}
+
+
+def _resolve_index_alias(ticker: str) -> str:
+    """Resolve common index names to Yahoo Finance ticker symbols."""
+    return INDEX_ALIASES.get(ticker, ticker)
 
 
 def _validate_ticker(ticker: str) -> str | None:
@@ -657,3 +682,81 @@ def api_compare():
     except Exception as e:
         logger.exception("Compare API error")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ─── Pattern Recognition ─────────────────────────────────────────────
+
+@api_data_bp.route('/api/patterns', methods=['GET'])
+def api_patterns():
+    """
+    Pattern Recognition Analysis — Candlestick patterns, chart patterns,
+    and support/resistance levels for a single ticker.
+
+    Query params:
+        ticker (str): Stock ticker (e.g., BBCA.JK, AAPL)
+    """
+    ticker_symbol = _validate_ticker(request.args.get('ticker'))
+    if not ticker_symbol:
+        return jsonify({'success': False, 'error': 'Valid ticker is required.'}), 400
+
+    # Resolve index aliases (e.g., IHSG → ^JKSE)
+    ticker_symbol = _resolve_index_alias(ticker_symbol)
+
+    try:
+        import yfinance as yf
+        from utils.patterns import detect_all_patterns
+        from utils.chart_patterns import detect_chart_patterns
+        from utils.support_resistance import detect_sr_levels
+
+        ticker = yf.Ticker(ticker_symbol)
+
+        # Fetch company info
+        company_name = ticker_symbol
+        price = None
+        currency = 'IDR'
+        try:
+            info = ticker.info or {}
+            company_name = info.get('longName', info.get('shortName', ticker_symbol))
+            price = info.get('currentPrice', info.get('regularMarketPrice'))
+            currency = info.get('currency', 'IDR')
+        except Exception:
+            pass
+
+        # Fetch 1 year of daily data
+        hist = ticker.history(period='1y')
+
+        if hist is None or hist.empty or len(hist) < 30:
+            return jsonify({
+                'success': False,
+                'error': 'Data historis tidak cukup (< 30 hari)',
+            }), 404
+
+        # Use latest close if price unavailable
+        if price is None:
+            price = float(hist['Close'].iloc[-1])
+
+        # Run pattern detection
+        candlestick_patterns = detect_all_patterns(hist)
+        chart_patterns = detect_chart_patterns(hist)
+        sr_levels = detect_sr_levels(hist)
+
+        return jsonify({
+            'success': True,
+            'ticker': ticker_symbol,
+            'company_name': company_name,
+            'price': round(price, 2) if price else None,
+            'currency': currency,
+            'candlestick_patterns': candlestick_patterns.get('patterns', []),
+            'pattern_summary': candlestick_patterns.get('summary', {}),
+            'chart_patterns': chart_patterns,
+            'support_levels': sr_levels.get('support_levels', []),
+            'resistance_levels': sr_levels.get('resistance_levels', []),
+            'current_zone': sr_levels.get('current_zone', 'unknown'),
+            'current_zone_label': sr_levels.get('current_zone_label', 'N/A'),
+            'current_price': sr_levels.get('current_price'),
+        })
+
+    except Exception as e:
+        logger.exception("Pattern API error for %s", ticker_symbol)
+        return jsonify({'success': False, 'error': str(e)}), 500
+

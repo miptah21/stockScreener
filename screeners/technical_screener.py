@@ -12,6 +12,9 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from screeners.stock_lists import STOCK_LISTS
 from utils.indicators import calculate_rsi, classify_rsi, calculate_macd, detect_macd_crossover
+from utils.patterns import detect_all_patterns
+from utils.chart_patterns import detect_chart_patterns
+from utils.support_resistance import detect_sr_levels
 
 logger = logging.getLogger(__name__)
 
@@ -575,6 +578,11 @@ def analyze_single_ticker(ticker_symbol: str) -> dict:
         # ── RSI Divergence ──
         div_info = detect_divergence(closes, rsi_series, lookback=14)
 
+        # ── Pattern Recognition ──
+        pattern_info = detect_all_patterns(hist)
+        chart_pattern_info = detect_chart_patterns(hist)
+        sr_info = detect_sr_levels(hist)
+
         # ── Confluence Score (0-100) ──
         confluence = compute_confluence_score(
             rsi_zone=rsi_info['zone'],
@@ -675,6 +683,14 @@ def analyze_single_ticker(ticker_symbol: str) -> dict:
             'composite_signal': confluence['signal'],
             'composite_color': confluence['color'],
             'composite_score': confluence['score'],
+            # Pattern Recognition
+            'patterns': pattern_info.get('patterns', []),
+            'pattern_summary': pattern_info.get('summary', {}),
+            'chart_patterns': chart_pattern_info,
+            'support_levels': sr_info.get('support_levels', []),
+            'resistance_levels': sr_info.get('resistance_levels', []),
+            'current_zone': sr_info.get('current_zone', 'unknown'),
+            'current_zone_label': sr_info.get('current_zone_label', 'N/A'),
             # Status
             'status': 'success',
         }
@@ -775,6 +791,11 @@ def _analyze_from_dataframe(ticker_symbol: str, hist: pd.DataFrame,
         # ── RSI Divergence ──
         div_info = detect_divergence(closes, rsi_series, lookback=14)
 
+        # ── Pattern Recognition ──
+        pattern_info = detect_all_patterns(hist)
+        chart_pattern_info = detect_chart_patterns(hist)
+        sr_info = detect_sr_levels(hist)
+
         # ── Confluence Score ──
         confluence = compute_confluence_score(
             rsi_zone=rsi_info['zone'],
@@ -864,6 +885,14 @@ def _analyze_from_dataframe(ticker_symbol: str, hist: pd.DataFrame,
             'composite_signal': confluence['signal'],
             'composite_color': confluence['color'],
             'composite_score': confluence['score'],
+            # Pattern Recognition
+            'patterns': pattern_info.get('patterns', []),
+            'pattern_summary': pattern_info.get('summary', {}),
+            'chart_patterns': chart_pattern_info,
+            'support_levels': sr_info.get('support_levels', []),
+            'resistance_levels': sr_info.get('resistance_levels', []),
+            'current_zone': sr_info.get('current_zone', 'unknown'),
+            'current_zone_label': sr_info.get('current_zone_label', 'N/A'),
             'status': 'success',
         }
     except Exception as e:

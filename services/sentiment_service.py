@@ -20,6 +20,29 @@ logger = logging.getLogger(__name__)
 # ─── Cache (15 min TTL) ─────────────────────────────────────────────
 _sentiment_cache = TTLCache(maxsize=32, ttl=900)
 
+# ─── Index / Ticker Search Terms ────────────────────────────────────
+INDEX_SEARCH_TERMS = {
+    '^JKSE': ['IHSG', 'Jakarta Composite', 'indeks harga saham gabungan'],
+    '^JKLQ45': ['LQ45', 'indeks LQ45'],
+    '^JKIDX30': ['IDX30', 'indeks IDX30'],
+    '^GSPC': ['S&P 500', 'SP500', 'Wall Street'],
+    '^DJI': ['Dow Jones', 'DJIA', 'Wall Street'],
+    '^IXIC': ['NASDAQ', 'Nasdaq Composite'],
+    '^N225': ['Nikkei 225', 'Nikkei', 'Tokyo Stock'],
+    '^HSI': ['Hang Seng', 'Hong Kong Stock'],
+    '^KS11': ['KOSPI', 'Korea Stock'],
+    '^FTSE': ['FTSE 100', 'London Stock'],
+    '^GDAXI': ['DAX', 'German Stock'],
+    '^STI': ['STI', 'Singapore Stock'],
+}
+
+INDEX_ALIASES_REVERSE = {
+    '^JKSE': 'IHSG', '^JKLQ45': 'LQ45', '^JKIDX30': 'IDX30',
+    '^GSPC': 'S&P 500', '^DJI': 'Dow Jones', '^IXIC': 'NASDAQ',
+    '^N225': 'Nikkei', '^HSI': 'Hang Seng', '^KS11': 'KOSPI',
+    '^FTSE': 'FTSE', '^GDAXI': 'DAX', '^STI': 'STI',
+}
+
 # ─── VADER Setup ─────────────────────────────────────────────────────
 _vader_analyzer = None
 
@@ -83,6 +106,176 @@ def _deduplicate(articles):
     return unique
 
 
+def _build_search_context(ticker):
+    """
+    Build smart search queries per source based on ticker type.
+    Returns dict with: company_name, ticker_clean, gnews_query, gnews_lang,
+    gnews_country, api_ticker, scrape_query, is_idx, is_index, keywords.
+    """
+    is_index = ticker.startswith('^')
+    is_idx = ticker.endswith('.JK') or ticker.startswith('^JK')
+    ticker_clean = ticker.replace('.JK', '').lstrip('^')
+
+    # Get company/index name
+    if is_index and ticker in INDEX_ALIASES_REVERSE:
+        company_name = INDEX_ALIASES_REVERSE[ticker]
+    else:
+        company_name = _get_company_name(ticker)
+
+    # Build keywords for relevance matching
+    keywords = set()
+    keywords.add(ticker_clean.lower())
+    if company_name:
+        # Add each word of company name (>= 3 chars)
+        for w in company_name.split():
+            if len(w) >= 3:
+                keywords.add(w.lower())
+    if is_index and ticker in INDEX_SEARCH_TERMS:
+        for term in INDEX_SEARCH_TERMS[ticker]:
+            keywords.add(term.lower())
+
+    # GNews query + locale
+    if is_index:
+        search_terms = INDEX_SEARCH_TERMS.get(ticker, [ticker_clean])
+        gnews_query = search_terms[0]  # Primary term
+        gnews_lang = 'id' if is_idx else 'en'
+        gnews_country = 'ID' if is_idx else 'US'
+    elif is_idx:
+        gnews_query = f"{company_name or ticker_clean} saham"
+        gnews_lang = 'id'
+        gnews_country = 'ID'
+    else:
+        gnews_query = f"{company_name or ticker_clean} stock"
+        gnews_lang = 'en'
+        gnews_country = 'US'
+
+    # API ticker (Finnhub, Marketaux)
+    api_ticker = ticker_clean if is_idx else ticker
+    if is_index:
+        api_ticker = ticker  # Pass index symbol as-is
+
+    # Scraper query (only used for IDX)
+    scrape_query = company_name if company_name else ticker_clean
+
+    return {
+        'company_name': company_name,
+        'ticker_clean': ticker_clean,
+        'gnews_query': gnews_query,
+        'gnews_lang': gnews_lang,
+        'gnews_country': gnews_country,
+        'api_ticker': api_ticker,
+        'scrape_query': scrape_query,
+        'is_idx': is_idx,
+        'is_index': is_index,
+        'keywords': keywords,
+    }
+
+
+def _normalize_date(date_str):
+    """
+    Parse various date formats into a datetime object.
+    Returns None if parsing fails.
+    """
+    if not date_str or not isinstance(date_str, str):
+        return None
+    date_str = date_str.strip()
+    # Common formats from our sources
+    formats = [
+        '%Y-%m-%dT%H:%M:%S',  # ISO
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d %H:%M',
+        '%Y-%m-%d',
+        '%d %b %Y %H:%M',     # "05 Mar 2026 10:30"
+        '%d %B %Y %H:%M',     # "05 March 2026 10:30"
+        '%d %b %Y',
+        '%d %B %Y',
+        '%d/%m/%Y %H:%M',
+        '%d/%m/%Y',
+        '%a, %d %b %Y %H:%M:%S %z',  # RSS date
+        '%a, %d %b %Y %H:%M:%S',
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str[:30], fmt)
+        except (ValueError, TypeError):
+            continue
+    # Try dateutil as last resort
+    try:
+        from dateutil import parser as dateutil_parser
+        return dateutil_parser.parse(date_str, fuzzy=True)
+    except Exception:
+        return None
+
+
+def _relevance_score(article, keywords):
+    """
+    Score an article's relevance to the ticker (0.0 to 1.0).
+    Based on keyword matches in title and snippet.
+    """
+    title = (article.get('title', '') or '').lower()
+    snippet = (article.get('snippet', '') or '').lower()
+    combined = f"{title} {snippet}"
+
+    if not combined.strip():
+        return 0.0
+
+    matches = 0
+    for kw in keywords:
+        if kw in combined:
+            # Title matches worth more
+            if kw in title:
+                matches += 2
+            else:
+                matches += 1
+
+    # Normalize: cap at 1.0
+    return min(matches / max(len(keywords), 1), 1.0)
+
+
+def _filter_and_sort(articles, keywords, max_age_days=7):
+    """
+    Filter articles by relevance and recency, then sort newest first.
+
+    1. Remove articles with zero relevance score
+    2. Remove articles older than max_age_days (if date is parseable)
+    3. Sort by date descending (newest first)
+    """
+    now = datetime.now()
+    cutoff = now - timedelta(days=max_age_days)
+    scored = []
+
+    for art in articles:
+        # Relevance check (skip for trusted sources like yfinance)
+        is_trusted = art.get('_trusted_source', False)
+        if not is_trusted:
+            score = _relevance_score(art, keywords)
+            if score <= 0:
+                continue
+        else:
+            score = 1.0
+
+        # Date parsing and freshness check
+        parsed_date = _normalize_date(art.get('published', ''))
+        if parsed_date:
+            # Make timezone-naive for comparison
+            if parsed_date.tzinfo is not None:
+                parsed_date = parsed_date.replace(tzinfo=None)
+            if parsed_date < cutoff:
+                continue  # Too old
+            # Normalize the published field to ISO format
+            art['published'] = parsed_date.strftime('%Y-%m-%d %H:%M')
+        else:
+            # Unknown date — keep but deprioritize
+            parsed_date = datetime.min
+
+        scored.append((parsed_date, score, art))
+
+    # Sort: newest first, then by relevance
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+
+    return [item[2] for item in scored]
+
+
 # ─── News Fetchers ───────────────────────────────────────────────────
 
 def _fetch_yfinance_news(ticker):
@@ -115,18 +308,19 @@ def _fetch_yfinance_news(ticker):
                     'url': link,
                     'published': str(pub_date)[:19] if pub_date else '',
                     'thumbnail': thumbnail,
+                    '_trusted_source': True,  # yfinance articles are ticker-bound
                 })
     except Exception as e:
         logger.warning(f"yfinance news error: {e}")
     return articles
 
 
-def _fetch_gnews(query, max_results=10):
+def _fetch_gnews(query, max_results=10, lang='id', country='ID'):
     """Fetch news from Google News via gnews package."""
     articles = []
     try:
         from gnews import GNews
-        gn = GNews(language='id', country='ID', max_results=max_results)
+        gn = GNews(language=lang, country=country, period='7d', max_results=max_results)
         results = gn.get_news(query) or []
         for item in results:
             articles.append({
@@ -277,6 +471,26 @@ Respond ONLY with valid JSON array, no other text. Example format:
 [{{"sentiment": "Bullish", "score": 0.7, "confidence": 85, "reasoning": "Record profit indicates growth"}}]
 """
 
+_INSIGHT_PROMPT = """You are a financial analyst providing market insights.
+Based on the following news articles about {ticker} ({company_name}), provide a concise market insight.
+
+Sentiment Summary: {overall_label} (score: {overall_score})
+Bullish: {bullish_count} articles | Bearish: {bearish_count} articles | Neutral: {neutral_count} articles
+
+Top Headlines:
+{headlines}
+
+Provide your insight in the following JSON format (respond ONLY with this JSON, no other text):
+{{
+  "summary": "2-3 sentence overview of current sentiment and key themes",
+  "key_drivers": ["driver 1", "driver 2", "driver 3"],
+  "outlook": "Brief 1-2 sentence outlook/recommendation",
+  "risk_factors": ["risk 1", "risk 2"]
+}}
+
+Write in Bahasa Indonesia if the ticker ends with .JK or is an Indonesian index. Otherwise write in English.
+"""
+
 
 def _analyze_claude(texts):
     """Analyze sentiment using Claude API."""
@@ -337,37 +551,42 @@ def _analyze_gemini(texts):
 
 
 def _analyze_groq(texts):
-    """Analyze sentiment using Moonshot AI via Groq API."""
-    api_key = Config.GROQ_API_KEY
-    if not api_key:
+    """Analyze sentiment using Moonshot AI via Groq API (with fallback key)."""
+    api_keys = [k for k in [Config.GROQ_API_KEY, Config.GROQ_API_KEY_2] if k]
+    if not api_keys:
         return None
-    try:
-        from groq import Groq
-        
-        client = Groq(api_key=api_key)
-        
-        headlines = '\n'.join(f'{i+1}. {t}' for i, t in enumerate(texts))
-        prompt = _LLM_PROMPT.format(headlines=headlines)
-        
-        response = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-            model="moonshotai/kimi-k2-instruct-0905",
-            temperature=0.0
-        )
-        content = response.choices[0].message.content
-        # Extract JSON from response
-        json_match = re.search(r'\[.*\]', content, re.DOTALL)
-        if json_match:
-            results = json.loads(json_match.group())
-            logger.info("Groq (Moonshot AI) sentiment analysis successful")
-            return results, 'Moonshot AI'
-    except Exception as e:
-        logger.warning(f"Groq analysis failed: {e}")
+
+    headlines = '\n'.join(f'{i+1}. {t}' for i, t in enumerate(texts))
+    prompt = _LLM_PROMPT.format(headlines=headlines)
+
+    for i, api_key in enumerate(api_keys):
+        try:
+            from groq import Groq
+            client = Groq(api_key=api_key)
+
+            response = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+                model="moonshotai/kimi-k2-instruct-0905",
+                temperature=0.0
+            )
+            content = response.choices[0].message.content
+            # Extract JSON from response
+            json_match = re.search(r'\[.*\]', content, re.DOTALL)
+            if json_match:
+                results = json.loads(json_match.group())
+                key_label = 'primary' if i == 0 else 'fallback'
+                logger.info(f"Groq (Moonshot AI) sentiment analysis successful (key: {key_label})")
+                return results, 'Moonshot AI'
+        except Exception as e:
+            key_label = 'primary' if i == 0 else 'fallback'
+            logger.warning(f"Groq analysis failed (key: {key_label}): {e}")
+            continue
+
     return None
 
 
@@ -430,6 +649,93 @@ def _run_sentiment_analysis(texts):
              'reasoning': 'No analyzer available'}] * len(texts), 'None'
 
 
+def _generate_insight(ticker, company_name, analyzed_articles, summary_data):
+    """
+    Generate a consolidated market insight from analyzed articles using LLM.
+    Uses cascading fallback: Groq → Gemini.
+    """
+    if not analyzed_articles:
+        return None
+
+    # Build the prompt with top headlines
+    top_articles = analyzed_articles[:10]  # Use top 10 most recent
+    headlines = '\n'.join(
+        f"{i+1}. [{a['sentiment_label']}] {a['title']}"
+        for i, a in enumerate(top_articles)
+    )
+
+    prompt = _INSIGHT_PROMPT.format(
+        ticker=ticker,
+        company_name=company_name or ticker,
+        overall_label=summary_data.get('overall_label', 'Neutral'),
+        overall_score=summary_data.get('overall_score', 0),
+        bullish_count=summary_data.get('bullish_count', 0),
+        bearish_count=summary_data.get('bearish_count', 0),
+        neutral_count=summary_data.get('neutral_count', 0),
+        headlines=headlines,
+    )
+
+    # Try LLMs in order
+    for analyzer_fn, model_name in [
+        (_try_insight_groq, 'Groq'),
+        (_try_insight_gemini, 'Gemini'),
+    ]:
+        result = analyzer_fn(prompt)
+        if result:
+            logger.info(f"Insight generated via {model_name}")
+            return result
+
+    logger.warning("No LLM available for insight generation")
+    return None
+
+
+def _try_insight_groq(prompt):
+    """Try generating insight via Groq."""
+    api_keys = [k for k in [Config.GROQ_API_KEY, Config.GROQ_API_KEY_2] if k]
+    if not api_keys:
+        return None
+    try:
+        from groq import Groq
+        for api_key in api_keys:
+            try:
+                client = Groq(api_key=api_key)
+                response = client.chat.completions.create(
+                    messages=[{'role': 'user', 'content': prompt}],
+                    model='moonshotai/kimi-k2-instruct-0905',
+                    temperature=0.3
+                )
+                content = response.choices[0].message.content
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    return json.loads(json_match.group())
+            except Exception:
+                continue
+    except Exception as e:
+        logger.warning(f"Groq insight error: {e}")
+    return None
+
+
+def _try_insight_gemini(prompt):
+    """Try generating insight via Gemini."""
+    api_key = Config.GEMINI_API_KEY
+    if not api_key:
+        return None
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+        )
+        content = response.text
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+    except Exception as e:
+        logger.warning(f"Gemini insight error: {e}")
+    return None
+
+
 # ─── Main Orchestrator ──────────────────────────────────────────────
 
 def _get_company_name(ticker):
@@ -461,42 +767,54 @@ def get_sentiment_analysis(ticker):
         return _sentiment_cache[cache_key]
 
     try:
-        # Get company name for search queries
-        company_name = _get_company_name(ticker)
-        ticker_clean = ticker.replace('.JK', '')
+        # Build smart search context
+        ctx = _build_search_context(ticker)
+        company_name = ctx['company_name']
+        ticker_clean = ctx['ticker_clean']
 
-        logger.info(f"Fetching sentiment for {ticker} (name: {company_name})")
+        logger.info(f"Fetching sentiment for {ticker} (name: {company_name}, "
+                    f"idx={ctx['is_idx']}, index={ctx['is_index']})")
 
         # ── Fetch from all sources ──
         all_articles = []
 
-        # 1. yfinance news
-        all_articles.extend(_fetch_yfinance_news(ticker))
+        # 1. yfinance news (always relevant — ticker-bound)
+        if not ctx['is_index']:  # yfinance news doesn't work well for indices
+            all_articles.extend(_fetch_yfinance_news(ticker))
 
-        # 2. GNews (Google News Indonesia)
-        search_query = f"{ticker_clean} saham" if ticker.endswith('.JK') else ticker_clean
-        all_articles.extend(_fetch_gnews(search_query, max_results=8))
+        # 2. GNews — with dynamic locale and 7-day window
+        all_articles.extend(_fetch_gnews(
+            ctx['gnews_query'], max_results=8,
+            lang=ctx['gnews_lang'], country=ctx['gnews_country']
+        ))
 
-        # 3. Marketaux
-        all_articles.extend(_fetch_marketaux(ticker))
+        # 3. Marketaux (works with ticker symbols)
+        if not ctx['is_index']:  # Marketaux doesn't support index symbols
+            all_articles.extend(_fetch_marketaux(ticker))
 
         # 4. Finnhub (works best with US tickers)
-        finnhub_ticker = ticker_clean if ticker.endswith('.JK') else ticker
-        all_articles.extend(_fetch_finnhub(finnhub_ticker))
+        if not ctx['is_index']:
+            finnhub_ticker = ticker_clean if ctx['is_idx'] else ticker
+            all_articles.extend(_fetch_finnhub(finnhub_ticker))
 
-        # 5. newsapi.ai
+        # 5. newsapi.ai — use company/index name for broader search
         newsapi_query = company_name if company_name else ticker_clean
         all_articles.extend(_fetch_newsapi_ai(newsapi_query, max_results=8))
 
-        # 6. Web scrapers (only for IDX stocks)
-        if ticker.endswith('.JK') or not '.' in ticker:
-            scrape_query = company_name if company_name else ticker_clean
-            all_articles.extend(_fetch_scraped_news(scrape_query, max_per_source=3))
+        # 6. Web scrapers (only for IDX stocks/indices)
+        if ctx['is_idx']:
+            all_articles.extend(_fetch_scraped_news(ctx['scrape_query'], max_per_source=3))
 
         # ── Deduplicate ──
         unique_articles = _deduplicate(all_articles)
 
-        if not unique_articles:
+        # ── Filter by relevance + freshness, sort newest first ──
+        filtered_articles = _filter_and_sort(unique_articles, ctx['keywords'], max_age_days=10)
+
+        logger.info(f"After filtering: {len(filtered_articles)}/{len(unique_articles)} articles "
+                    f"(removed {len(unique_articles) - len(filtered_articles)} irrelevant/stale)")
+
+        if not filtered_articles:
             result = {
                 'success': True,
                 'ticker': ticker,
@@ -523,13 +841,13 @@ def get_sentiment_analysis(ticker):
         # ── Run Sentiment Analysis ──
         texts = [
             f"{a['title']}. {a.get('snippet', '')}" if a.get('snippet') else a['title']
-            for a in unique_articles
+            for a in filtered_articles
         ]
         analysis_results, model_used = _run_sentiment_analysis(texts)
 
         # ── Merge results into articles ──
         analyzed_articles = []
-        for i, article in enumerate(unique_articles):
+        for i, article in enumerate(filtered_articles):
             sentiment_data = analysis_results[i] if i < len(analysis_results) else {
                 'sentiment': 'Neutral', 'score': 0, 'confidence': 0, 'reasoning': ''
             }
@@ -592,6 +910,17 @@ def get_sentiment_analysis(ticker):
             'articles': analyzed_articles,
             'source_breakdown': source_counts,
         }
+
+        # ── Generate LLM Insight ──
+        try:
+            insight = _generate_insight(
+                ticker, company_name, analyzed_articles,
+                result['sentiment_summary']
+            )
+            result['insight'] = insight
+        except Exception as e:
+            logger.warning(f"Insight generation failed: {e}")
+            result['insight'] = None
 
         _sentiment_cache[cache_key] = result
         return result
