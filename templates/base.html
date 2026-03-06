@@ -33,12 +33,13 @@
 
             <!-- Data Dropdown -->
             <div class="nav__dropdown">
-                <div class="nav__link {% if active_page in ['avg-price', 'ownership', 'market', 'compare'] %}nav__link--active{% else %}nav__link--default{% endif %} nav__dropdown-toggle">
+                <div class="nav__link {% if active_page in ['avg-price', 'ownership', 'idx-ownership', 'market', 'compare'] %}nav__link--active{% else %}nav__link--default{% endif %} nav__dropdown-toggle">
                     📊 Data <span class="nav__dropdown-arrow">▼</span>
                 </div>
                 <div class="nav__dropdown-menu">
                     <a href="/avg-price" class="nav__dropdown-item {% if active_page == 'avg-price' %}nav__dropdown-item--active{% endif %}">Rata-Rata Harga</a>
                     <a href="/ownership" class="nav__dropdown-item {% if active_page == 'ownership' %}nav__dropdown-item--active{% endif %}">Ownership</a>
+                    <a href="/idx-ownership" class="nav__dropdown-item {% if active_page == 'idx-ownership' %}nav__dropdown-item--active{% endif %}">🏛️ IDX Shareholders</a>
                     <a href="/market-overview" class="nav__dropdown-item {% if active_page == 'market' %}nav__dropdown-item--active{% endif %}">Market Overview</a>
                     <a href="/compare" class="nav__dropdown-item {% if active_page == 'compare' %}nav__dropdown-item--active{% endif %}">📊 Compare</a>
                 </div>
