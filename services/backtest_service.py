@@ -1,6 +1,6 @@
 """
-Backtesting Service — Run strategy backtests using VectorBT.
-Supports RSI, MACD, EMA Cross, and Combined strategies.
+Backtesting Service — Run strategy backtests using a custom Pandas engine.
+Supports RSI, MACD, EMA Cross, Bollinger, Combined, and Custom strategies.
 """
 
 import logging
@@ -9,7 +9,6 @@ import math
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import vectorbt as vbt
 
 logger = logging.getLogger(__name__)
 
@@ -56,20 +55,16 @@ def _normalize_ticker(raw: str) -> str:
     Normalize a ticker for Yahoo Finance.
     - Resolve index aliases (IHSG → ^JKSE, SPX → ^GSPC, etc.)
     - If ticker already has a suffix (.JK, .L, etc.) or starts with ^, use as-is
-    - If ticker looks like a plain IDX ticker (4 uppercase letters), append .JK
-    - Otherwise, use as-is (e.g., AAPL, MSFT, TSLA)
+    - Otherwise, use as-is (users should explicitly use .JK for IDX stocks)
     """
     t = raw.strip().upper()
     # Check index alias first
     if t in INDEX_ALIASES:
         return INDEX_ALIASES[t]
-    # Already has suffix or is an index
+    # Already has suffix or is an index — use as-is
     if '.' in t or t.startswith('^'):
         return t
-    # Heuristic: 4-letter all-alpha tickers are likely IDX
-    if t.isalpha() and len(t) == 4:
-        return f"{t}.JK"
-    # Everything else (AAPL, MSFT, BRK-B, etc.) — use as-is
+    # All other tickers — use as-is (e.g., AAPL, MSFT, BBCA without .JK)
     return t
 
 
@@ -136,38 +131,64 @@ def _compute_macd(closes, fast=12, slow=26, signal=9):
 
 def _generate_signals(hist, strategy_type, params):
     """
-    Generate entry/exit boolean Series/DataFrames based on strategy type and params.
+    Generate entry/exit boolean Series based on strategy type and params.
+    
+    Args:
+        hist: DataFrame with OHLCV columns, or a Series of close prices.
+        strategy_type: Strategy identifier string.
+        params: Dict of strategy parameters.
+    
+    Returns:
+        (entries, exits) as boolean Series.
     """
+    # Robustly extract close prices from DataFrame or Series
     if isinstance(hist, pd.DataFrame) and 'Close' in hist.columns:
         closes = hist['Close']
+    elif isinstance(hist, pd.Series):
+        closes = hist
     else:
-        closes = hist  # fallback if passed Series directly
+        closes = hist
 
+    # Ensure we work with a 1D Series
     if isinstance(closes, pd.DataFrame):
-        entries = pd.DataFrame(False, index=closes.index, columns=closes.columns)
-        exits = pd.DataFrame(False, index=closes.index, columns=closes.columns)
-    else:
-        entries = pd.Series(False, index=closes.index)
-        exits = pd.Series(False, index=closes.index)
+        closes = closes.iloc[:, 0]
+
+    entries = pd.Series(False, index=closes.index)
+    exits = pd.Series(False, index=closes.index)
 
     if strategy_type == 'custom':
         custom_code = params.get('custom_code', '')
         if not custom_code:
             raise ValueError("Kode strategi custom kosong.")
-            
+
+        # Restricted execution — only allow safe builtins
+        safe_builtins = {
+            'abs': abs, 'max': max, 'min': min, 'round': round,
+            'len': len, 'range': range, 'int': int, 'float': float,
+            'True': True, 'False': False, 'None': None,
+            'print': print,
+        }
+        safe_globals = {
+            '__builtins__': safe_builtins,
+            'pd': pd,
+            'np': np,
+        }
         local_dict = {}
         try:
-            # Sandbox the string execution
-            exec(custom_code, globals(), local_dict)
+            exec(custom_code, safe_globals, local_dict)
             if 'custom_strategy' not in local_dict:
                 raise ValueError("Kode tidak memiliki fungsi bernama 'custom_strategy(hist)'")
-                
+
             func = local_dict['custom_strategy']
-            # Execute with full historical dataframe
-            e, x = func(hist)
+            # Provide a DataFrame-like input
+            if isinstance(hist, pd.Series):
+                hist_input = pd.DataFrame({'Close': hist})
+            else:
+                hist_input = hist
+            e, x = func(hist_input)
             entries = e
             exits = x
-            
+
         except Exception as e:
             raise ValueError(f"Error pada Custom Strategy: {str(e)}")
 
@@ -177,9 +198,7 @@ def _generate_signals(hist, strategy_type, params):
         exit_threshold = float(params.get('rsi_exit', 70))
 
         rsi = _compute_rsi(closes, period)
-        # Buy when RSI crosses below entry threshold
         entries = (rsi < entry_threshold) & (rsi.shift(1) >= entry_threshold)
-        # Sell when RSI crosses above exit threshold
         exits = (rsi > exit_threshold) & (rsi.shift(1) <= exit_threshold)
 
     elif strategy_type == 'macd':
@@ -188,9 +207,7 @@ def _generate_signals(hist, strategy_type, params):
         signal = int(params.get('macd_signal', 9))
 
         macd_line, signal_line, _ = _compute_macd(closes, fast, slow, signal)
-        # Buy on bullish crossover (MACD crosses above signal)
         entries = (macd_line > signal_line) & (macd_line.shift(1) <= signal_line.shift(1))
-        # Sell on bearish crossover (MACD crosses below signal)
         exits = (macd_line < signal_line) & (macd_line.shift(1) >= signal_line.shift(1))
 
     elif strategy_type == 'ema_cross':
@@ -199,13 +216,10 @@ def _generate_signals(hist, strategy_type, params):
 
         ema_short = _compute_ema(closes, short_period)
         ema_long = _compute_ema(closes, long_period)
-        # Buy when short EMA crosses above long EMA
         entries = (ema_short > ema_long) & (ema_short.shift(1) <= ema_long.shift(1))
-        # Sell when short EMA crosses below long EMA
         exits = (ema_short < ema_long) & (ema_short.shift(1) >= ema_long.shift(1))
 
     elif strategy_type == 'combined':
-        # RSI + MACD combined
         rsi_period = int(params.get('rsi_period', 14))
         rsi_entry = float(params.get('rsi_entry', 30))
         rsi_exit = float(params.get('rsi_exit', 70))
@@ -222,9 +236,7 @@ def _generate_signals(hist, strategy_type, params):
         rsi_sell = rsi > rsi_exit
         macd_sell = (macd_line < signal_line) & (macd_line.shift(1) >= signal_line.shift(1))
 
-        # Entry: MACD bullish cross while RSI is oversold
         entries = macd_buy & rsi_buy
-        # Exit: either RSI overbought or MACD bearish cross
         exits = rsi_sell | macd_sell
 
     elif strategy_type == 'bollinger':
@@ -236,9 +248,7 @@ def _generate_signals(hist, strategy_type, params):
         upper = middle + bb_std * std
         lower = middle - bb_std * std
 
-        # Buy when price crosses below lower band
         entries = (closes < lower) & (closes.shift(1) >= lower.shift(1))
-        # Sell when price crosses above upper band
         exits = (closes > upper) & (closes.shift(1) <= upper.shift(1))
 
     # Fill NaN with False
@@ -248,39 +258,147 @@ def _generate_signals(hist, strategy_type, params):
     return entries, exits
 
 
-def _extract_trades(portfolio):
-    """Extract trade log from VectorBT portfolio."""
+# ─── Custom Pandas Backtest Engine ────────────────────────────────────
+
+def _run_pandas_backtest(closes, entries, exits, initial_capital, fees,
+                         stop_loss_pct=0, take_profit_pct=0):
+    """
+    Run a backtest simulation using pure pandas logic.
+
+    Simulates a simple long-only strategy:
+    - On entry signal, buy as many shares as capital allows.
+    - On exit signal, sell all shares.
+    - Stop-loss/take-profit checked daily if position is open.
+
+    Returns:
+        dict with keys: equity (Series), trades (list of dicts),
+        total_return, max_drawdown, sharpe_ratio, win_rate,
+        total_trades, profit_factor.
+    """
+    cash = float(initial_capital)
+    position = 0.0       # shares held
+    entry_price = 0.0
+    entry_date = None
     trades = []
-    try:
-        records = portfolio.trades.records_readable
-        if records is None or records.empty:
-            return trades
 
-        for _, row in records.iterrows():
-            entry_date = str(row.get('Entry Timestamp', ''))[:10]
-            exit_date = str(row.get('Exit Timestamp', ''))[:10]
-            entry_price = _safe_val(row.get('Avg Entry Price', 0))
-            exit_price = _safe_val(row.get('Avg Exit Price', 0))
-            pnl = _safe_val(row.get('PnL', 0))
-            ret = _safe_val(row.get('Return', 0))
-            size = _safe_val(row.get('Size', 0))
-            direction = str(row.get('Direction', 'Long'))
+    equity_values = []
+    equity_dates = []
 
+    sl = stop_loss_pct / 100 if stop_loss_pct and stop_loss_pct > 0 else 0
+    tp = take_profit_pct / 100 if take_profit_pct and take_profit_pct > 0 else 0
+
+    for i in range(len(closes)):
+        date = closes.index[i]
+        price = float(closes.iloc[i])
+
+        # Check stop-loss / take-profit if in position
+        if position > 0:
+            change = (price - entry_price) / entry_price
+            if (sl > 0 and change <= -sl) or (tp > 0 and change >= tp):
+                # Exit by SL/TP
+                sell_value = position * price
+                fee = sell_value * fees
+                cash += sell_value - fee
+                pnl = (price - entry_price) * position - (entry_price * position * fees) - fee
+                trades.append({
+                    'entry_date': entry_date.strftime('%Y-%m-%d') if hasattr(entry_date, 'strftime') else str(entry_date)[:10],
+                    'exit_date': date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)[:10],
+                    'entry_price': round(entry_price, 2),
+                    'exit_price': round(price, 2),
+                    'size': round(position, 2),
+                    'pnl': round(pnl, 2),
+                    'return_pct': round(change * 100, 2),
+                    'direction': 'Long',
+                })
+                position = 0.0
+                entry_price = 0.0
+                entry_date = None
+
+        # Process exit signal (sell all)
+        if position > 0 and exits.iloc[i]:
+            sell_value = position * price
+            fee = sell_value * fees
+            cash += sell_value - fee
+            change = (price - entry_price) / entry_price
+            pnl = (price - entry_price) * position - (entry_price * position * fees) - fee
             trades.append({
-                'entry_date': entry_date,
-                'exit_date': exit_date,
+                'entry_date': entry_date.strftime('%Y-%m-%d') if hasattr(entry_date, 'strftime') else str(entry_date)[:10],
+                'exit_date': date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date)[:10],
                 'entry_price': round(entry_price, 2),
-                'exit_price': round(exit_price, 2),
-                'size': round(size, 2),
+                'exit_price': round(price, 2),
+                'size': round(position, 2),
                 'pnl': round(pnl, 2),
-                'return_pct': round(ret * 100, 2),
-                'direction': direction,
+                'return_pct': round(change * 100, 2),
+                'direction': 'Long',
             })
-    except Exception as e:
-        logger.warning(f"Error extracting trades: {e}")
+            position = 0.0
+            entry_price = 0.0
+            entry_date = None
 
-    return trades
+        # Process entry signal (buy)
+        if position == 0 and entries.iloc[i]:
+            fee_factor = 1 + fees
+            shares = math.floor(cash / (price * fee_factor))
+            if shares > 0:
+                cost = shares * price
+                fee = cost * fees
+                cash -= cost + fee
+                position = float(shares)
+                entry_price = price
+                entry_date = date
 
+        # Record equity
+        portfolio_value = cash + position * price
+        equity_values.append(portfolio_value)
+        equity_dates.append(date)
+
+    equity = pd.Series(equity_values, index=equity_dates)
+
+    # ── Compute metrics ──
+    total_return_pct = ((equity.iloc[-1] / initial_capital) - 1) * 100 if len(equity) > 0 else 0
+
+    # Max drawdown
+    running_max = equity.cummax()
+    drawdown = (equity - running_max) / running_max
+    max_drawdown_pct = abs(float(drawdown.min())) * 100 if len(drawdown) > 0 else 0
+
+    # Sharpe ratio (annualized, assuming 252 trading days)
+    daily_returns = equity.pct_change().dropna()
+    if len(daily_returns) > 1 and daily_returns.std() > 0:
+        sharpe = (daily_returns.mean() / daily_returns.std()) * np.sqrt(252)
+    else:
+        sharpe = 0.0
+
+    # Win rate
+    total_trades = len(trades)
+    winning_trades = [t for t in trades if t['pnl'] > 0]
+    losing_trades = [t for t in trades if t['pnl'] < 0]
+    win_rate = (len(winning_trades) / total_trades * 100) if total_trades > 0 else 0
+
+    # Profit factor
+    total_wins = sum(t['pnl'] for t in winning_trades)
+    total_losses = abs(sum(t['pnl'] for t in losing_trades))
+    if total_losses > 0:
+        profit_factor = round(total_wins / total_losses, 2)
+    elif total_wins > 0:
+        profit_factor = 999.99
+    else:
+        profit_factor = 0
+
+    return {
+        'equity': equity,
+        'drawdown': drawdown,
+        'trades': trades,
+        'total_return_pct': round(_safe_val(total_return_pct), 2),
+        'max_drawdown_pct': round(_safe_val(max_drawdown_pct), 2),
+        'sharpe_ratio': round(_safe_val(sharpe), 2),
+        'win_rate': round(_safe_val(win_rate), 2),
+        'total_trades': total_trades,
+        'profit_factor': profit_factor,
+    }
+
+
+# ─── Main Backtest Functions ─────────────────────────────────────────
 
 def run_backtest(ticker, strategy_type, params, period='2y',
                  initial_capital=100_000_000, fees_pct=0.15,
@@ -290,10 +408,10 @@ def run_backtest(ticker, strategy_type, params, period='2y',
 
     Args:
         ticker: Stock ticker (e.g., 'BBCA.JK')
-        strategy_type: 'rsi', 'macd', 'ema_cross', or 'combined'
+        strategy_type: 'rsi', 'macd', 'ema_cross', 'combined', 'bollinger', 'custom'
         params: Strategy-specific parameters dict
         period: Historical period ('1y', '2y', '3y', '5y')
-        initial_capital: Starting capital in IDR
+        initial_capital: Starting capital
         fees_pct: Round-trip broker fees percentage
         stop_loss_pct: Stop loss percentage (0 = disabled)
         take_profit_pct: Take profit percentage (0 = disabled)
@@ -310,44 +428,49 @@ def run_backtest(ticker, strategy_type, params, period='2y',
         return {'success': False, 'error': f'Invalid strategy_type. Use: {valid_strategies}'}
 
     try:
-        # 1. Fetch historical data for one or multiple tickers
+        # 1. Fetch historical data
         tickers = [_normalize_ticker(t) for t in ticker.split(',')]
 
         if len(tickers) == 1:
             stock = yf.Ticker(tickers[0])
             try:
                 hist = stock.history(period=period)
-            except (TypeError, KeyError, ValueError) as e:
+            except (TypeError, KeyError, ValueError):
                 return {'success': False, 'error': f'No data available for {tickers[0]}. Ticker may be invalid or delisted.'}
         else:
             try:
                 hist = yf.download(tickers, period=period, progress=False)
-            except (TypeError, KeyError, ValueError) as e:
-                return {'success': False, 'error': f'No data available for one or more tickers. Some may be invalid or delisted.'}
+            except (TypeError, KeyError, ValueError):
+                return {'success': False, 'error': 'No data available for one or more tickers. Some may be invalid or delisted.'}
 
         if hist.empty or len(hist) < 50:
             return {'success': False, 'error': f'Insufficient data for {ticker} ({period})'}
 
+        # Extract closes as 1D Series
         if isinstance(hist, pd.DataFrame):
             if getattr(hist.columns, 'nlevels', 1) > 1:
-                closes = hist['Close']
+                closes = hist['Close'].iloc[:, 0]
             elif 'Close' in hist.columns:
                 closes = hist['Close']
             else:
-                closes = hist
+                closes = hist.iloc[:, 0]
         else:
             closes = hist
+
+        if isinstance(closes, pd.DataFrame):
+            closes = closes.iloc[:, 0]
 
         # 2. Generate entry/exit signals
         entries, exits = _generate_signals(hist, strategy_type, params)
 
         # Check if any signals were generated
-        has_signals = entries.any().any() if isinstance(entries, pd.DataFrame) else entries.any()
-        
+        has_signals = entries.any()
+
         if not has_signals:
-            bh_ret = round(((closes.iloc[-1] / closes.iloc[0]) - 1).mean() * 100, 2) if isinstance(closes, pd.DataFrame) else round(((closes.iloc[-1] / closes.iloc[0]) - 1) * 100, 2)
+            bh_ret = round(((closes.iloc[-1] / closes.iloc[0]) - 1) * 100, 2)
             return {
                 'success': True,
+                'resolved_ticker': ', '.join(tickers),
                 'summary': {
                     'total_return_pct': 0,
                     'win_rate': 0,
@@ -369,96 +492,35 @@ def run_backtest(ticker, strategy_type, params, period='2y',
                 'message': 'Tidak ada sinyal trading yang dihasilkan. Coba sesuaikan parameter strategi atau logic code.',
             }
 
-        # 3. Run VectorBT portfolio simulation
+        # 3. Run pandas backtest simulation
         fees = fees_pct / 100
-        pf_kwargs = dict(
-            close=closes,
-            entries=entries,
-            exits=exits,
-            init_cash=initial_capital,
-            fees=fees,
-            freq='1D',
+        bt = _run_pandas_backtest(
+            closes, entries, exits, initial_capital, fees,
+            stop_loss_pct=stop_loss_pct, take_profit_pct=take_profit_pct
         )
-        if isinstance(closes, pd.DataFrame):
-            pf_kwargs['cash_sharing'] = True
-            pf_kwargs['group_by'] = True
-
-        # Add stop loss / take profit if specified
-        if stop_loss_pct and stop_loss_pct > 0:
-            pf_kwargs['sl_stop'] = stop_loss_pct / 100
-        if take_profit_pct and take_profit_pct > 0:
-            pf_kwargs['tp_stop'] = take_profit_pct / 100
-
-        portfolio = vbt.Portfolio.from_signals(**pf_kwargs)
-
-        # 4. Extract metrics
-        stats = portfolio.stats()
-
-        total_return = _safe_val(stats.get('Total Return [%]', 0))
-        max_dd = _safe_val(stats.get('Max Drawdown [%]', 0))
-        sharpe = _safe_val(stats.get('Sharpe Ratio', 0))
-        total_trades = int(_safe_val(stats.get('Total Trades', 0)))
-        win_rate = _safe_val(stats.get('Win Rate [%]', 0))
-
-        # Profit factor
-        try:
-            trades_records = portfolio.trades.records_readable
-            if trades_records is not None and not trades_records.empty:
-                winning = trades_records[trades_records['PnL'] > 0]['PnL'].sum()
-                losing = abs(trades_records[trades_records['PnL'] < 0]['PnL'].sum())
-                if losing > 0:
-                    profit_factor = round(winning / losing, 2)
-                elif winning > 0:
-                    # All trades are winners, cap at 999.99
-                    profit_factor = 999.99
-                else:
-                    profit_factor = 0
-            else:
-                profit_factor = 0
-        except Exception:
-            profit_factor = 0
 
         # Buy & Hold comparison
-        if isinstance(closes, pd.DataFrame):
-            buy_hold_return = round(((closes.iloc[-1] / closes.iloc[0]) - 1).mean() * 100, 2)
-        else:
-            buy_hold_return = round(((closes.iloc[-1] / closes.iloc[0]) - 1) * 100, 2)
+        buy_hold_return = round(((closes.iloc[-1] / closes.iloc[0]) - 1) * 100, 2)
 
-        # 5. Equity curve
-        equity = portfolio.value()
-        if len(equity) > 500:
-            step = max(1, len(equity) // 500)
-            equity_sampled = equity.iloc[::step]
-        else:
-            equity_sampled = equity
-
+        # 4. Equity curve (sampled for chart)
+        equity = bt['equity']
+        step = max(1, len(equity) // 500) if len(equity) > 500 else 1
+        equity_sampled = equity.iloc[::step]
         equity_dates = [d.strftime('%Y-%m-%d') for d in equity_sampled.index]
         equity_values = [round(_safe_val(v), 0) for v in equity_sampled.values]
 
-        # 6. Drawdown curve
-        drawdown = portfolio.drawdown()
-        if len(drawdown) > 500:
-            dd_sampled = drawdown.iloc[::step]
-        else:
-            dd_sampled = drawdown
+        # 5. Drawdown curve
+        drawdown = bt['drawdown']
+        dd_sampled = drawdown.iloc[::step]
         dd_dates = [d.strftime('%Y-%m-%d') for d in dd_sampled.index]
         dd_values = [round(_safe_val(v) * 100, 2) for v in dd_sampled.values]
 
-        # 7. Price data for chart
-        if isinstance(closes, pd.DataFrame):
-            price_series = closes.iloc[:, 0]
-        else:
-            price_series = closes
-
-        if len(price_series) > 500:
-            price_sampled = price_series.iloc[::step]
-        else:
-            price_sampled = price_series
-            
+        # 6. Price data for chart
+        price_sampled = closes.iloc[::step]
         price_dates = [d.strftime('%Y-%m-%d') for d in price_sampled.index]
         price_values = [round(_safe_val(v), 0) for v in price_sampled.values]
 
-        # 8. Benchmark — auto-detect based on ticker market
+        # 7. Benchmark — auto-detect based on ticker market
         benchmark_data = {'dates': [], 'values': []}
         bm_ticker_sym, bm_name = _get_benchmark(tickers[0])
         try:
@@ -476,11 +538,12 @@ def run_backtest(ticker, strategy_type, params, period='2y',
                         (bm_hist.index >= stock_start) & (bm_hist.index <= stock_end)
                     ]
                     if not bm_clipped.empty and len(bm_clipped) > 5:
-                        bm_norm = (bm_clipped['Close'] / bm_clipped['Close'].iloc[0]) * initial_capital
-                        if len(bm_norm) > 500:
-                            bm_sampled = bm_norm.iloc[::max(1, len(bm_norm) // 500)]
-                        else:
-                            bm_sampled = bm_norm
+                        bm_close = bm_clipped['Close']
+                        if isinstance(bm_close, pd.DataFrame):
+                            bm_close = bm_close.iloc[:, 0]
+                        bm_norm = (bm_close / bm_close.iloc[0]) * initial_capital
+                        bm_step = max(1, len(bm_norm) // 500) if len(bm_norm) > 500 else 1
+                        bm_sampled = bm_norm.iloc[::bm_step]
                         benchmark_data = {
                             'dates': [d.strftime('%Y-%m-%d') for d in bm_sampled.index],
                             'values': [round(_safe_val(v), 0) for v in bm_sampled.values],
@@ -494,20 +557,18 @@ def run_backtest(ticker, strategy_type, params, period='2y',
         except Exception:
             currency = 'IDR'
 
-        # 9. Trade log
-        trade_log = _extract_trades(portfolio)
-
         return {
             'success': True,
+            'resolved_ticker': ', '.join(tickers),
             'currency': currency,
             'benchmark_name': bm_name,
             'summary': {
-                'total_return_pct': float(round(total_return, 2)),
-                'win_rate': float(round(win_rate, 2)),
-                'max_drawdown_pct': float(round(-abs(max_dd), 2)),
-                'sharpe_ratio': float(round(sharpe, 2)),
-                'total_trades': int(total_trades),
-                'profit_factor': float(profit_factor),
+                'total_return_pct': float(bt['total_return_pct']),
+                'win_rate': float(bt['win_rate']),
+                'max_drawdown_pct': float(round(-abs(bt['max_drawdown_pct']), 2)),
+                'sharpe_ratio': float(bt['sharpe_ratio']),
+                'total_trades': int(bt['total_trades']),
+                'profit_factor': float(bt['profit_factor']),
                 'buy_hold_return_pct': float(buy_hold_return),
             },
             'equity_curve': {
@@ -523,8 +584,8 @@ def run_backtest(ticker, strategy_type, params, period='2y',
                 'prices': price_values,
             },
             'benchmark_curve': benchmark_data,
-            'monthly_returns': _compute_monthly_returns(portfolio),
-            'trades': trade_log,
+            'monthly_returns': _compute_monthly_returns(equity),
+            'trades': bt['trades'],
         }
 
     except Exception as e:
@@ -532,10 +593,9 @@ def run_backtest(ticker, strategy_type, params, period='2y',
         return {'success': False, 'error': str(e)}
 
 
-def _compute_monthly_returns(portfolio):
+def _compute_monthly_returns(equity):
     """Compute monthly return matrix {year: {month: return%}}."""
     try:
-        equity = portfolio.value()
         monthly = equity.resample('ME').last()
         monthly_ret = monthly.pct_change() * 100
 
@@ -555,7 +615,6 @@ def run_optimization(ticker, strategy_type, param_ranges, period='2y',
                      initial_capital=100_000_000, fees_pct=0.15):
     """
     Run grid search optimization across parameter ranges.
-    Uses VectorBT's vectorized multi-column simulation.
 
     Args:
         ticker: Stock ticker (e.g., 'BBCA.JK')
@@ -577,83 +636,54 @@ def run_optimization(ticker, strategy_type, param_ranges, period='2y',
         tickers = [t.strip().upper() for t in ticker.split(',')]
         if len(tickers) > 1:
             return {'success': False, 'error': 'Optimasi saat ini hanya mendukung Single Ticker.'}
-            
+
         clean_ticker = _normalize_ticker(tickers[0])
 
         stock = yf.Ticker(clean_ticker)
         try:
             hist = stock.history(period=period)
-        except (TypeError, KeyError, ValueError) as e:
+        except (TypeError, KeyError, ValueError):
             return {'success': False, 'error': f'No data available for {clean_ticker}. Ticker may be invalid or delisted.'}
         if hist.empty or len(hist) < 50:
             return {'success': False, 'error': f'Insufficient data for {clean_ticker}'}
 
         closes = hist['Close']
+        if isinstance(closes, pd.DataFrame):
+            closes = closes.iloc[:, 0]
         fees = fees_pct / 100
 
-        # Build all param combinations and generate signals
-        entries_list = []
-        exits_list = []
+        # Build all param combinations
         combos = []
 
         if strategy_type == 'rsi':
             entry_vals = param_ranges.get('rsi_entry', [30])
             exit_vals = param_ranges.get('rsi_exit', [70])
-            rsi_period = int(param_ranges.get('rsi_period', [14])[0]) if isinstance(param_ranges.get('rsi_period'), list) else 14
-            rsi = _compute_rsi(closes, rsi_period)
-
             for ev, xv in product(entry_vals, exit_vals):
                 if ev >= xv:
-                    continue  # skip invalid: entry must be < exit
-                e = ((rsi < ev) & (rsi.shift(1) >= ev)).fillna(False)
-                x = ((rsi > xv) & (rsi.shift(1) <= xv)).fillna(False)
-                entries_list.append(e)
-                exits_list.append(x)
+                    continue
                 combos.append({'rsi_entry': ev, 'rsi_exit': xv})
 
         elif strategy_type == 'macd':
             fast_vals = param_ranges.get('macd_fast', [12])
             slow_vals = param_ranges.get('macd_slow', [26])
             signal_vals = param_ranges.get('macd_signal', [9])
-
             for f, s, sig in product(fast_vals, slow_vals, signal_vals):
                 if f >= s:
                     continue
-                ml, sl, _ = _compute_macd(closes, f, s, sig)
-                e = ((ml > sl) & (ml.shift(1) <= sl.shift(1))).fillna(False)
-                x = ((ml < sl) & (ml.shift(1) >= sl.shift(1))).fillna(False)
-                entries_list.append(e)
-                exits_list.append(x)
                 combos.append({'macd_fast': f, 'macd_slow': s, 'macd_signal': sig})
 
         elif strategy_type == 'ema_cross':
             short_vals = param_ranges.get('ema_short', [12])
             long_vals = param_ranges.get('ema_long', [26])
-
             for sv, lv in product(short_vals, long_vals):
                 if sv >= lv:
                     continue
-                es = _compute_ema(closes, sv)
-                el = _compute_ema(closes, lv)
-                e = ((es > el) & (es.shift(1) <= el.shift(1))).fillna(False)
-                x = ((es < el) & (es.shift(1) >= el.shift(1))).fillna(False)
-                entries_list.append(e)
-                exits_list.append(x)
                 combos.append({'ema_short': sv, 'ema_long': lv})
 
         elif strategy_type == 'bollinger':
             period_vals = param_ranges.get('bb_period', [20])
             std_vals = param_ranges.get('bb_std', [2.0])
-
             for p, sd in product(period_vals, std_vals):
-                mid = closes.rolling(p).mean()
-                std = closes.rolling(p).std()
-                lower = mid - sd * std
-                upper = mid + sd * std
-                e = ((closes < lower) & (closes.shift(1) >= lower.shift(1))).fillna(False)
-                x = ((closes > upper) & (closes.shift(1) <= upper.shift(1))).fillna(False)
-                entries_list.append(e)
-                exits_list.append(x)
                 combos.append({'bb_period': p, 'bb_std': sd})
         else:
             return {'success': False, 'error': f'Optimization not supported for: {strategy_type}'}
@@ -661,29 +691,27 @@ def run_optimization(ticker, strategy_type, param_ranges, period='2y',
         if not combos:
             return {'success': False, 'error': 'No valid parameter combinations generated'}
 
-        # Stack as DataFrame columns for vectorized simulation
-        all_entries = pd.concat(entries_list, axis=1).astype(bool)
-        all_exits = pd.concat(exits_list, axis=1).astype(bool)
-
-        pf = vbt.Portfolio.from_signals(
-            closes, all_entries, all_exits,
-            init_cash=initial_capital, fees=fees, freq='1D'
-        )
-
-        # Extract metrics per combo
-        total_returns = pf.total_return()
-        sharpe_ratios = pf.sharpe_ratio()
-        max_drawdowns = pf.max_drawdown()
-        trade_counts = pf.trades.count()
-
+        # Run backtest for each combo
         results = []
-        for i, combo in enumerate(combos):
+        for combo in combos:
+            entries, exits = _generate_signals(closes, strategy_type, combo)
+            if not entries.any():
+                results.append({
+                    **combo,
+                    'total_return_pct': 0,
+                    'sharpe_ratio': 0,
+                    'max_drawdown_pct': 0,
+                    'total_trades': 0,
+                })
+                continue
+
+            bt = _run_pandas_backtest(closes, entries, exits, initial_capital, fees)
             results.append({
                 **combo,
-                'total_return_pct': round(_safe_val(float(total_returns.iloc[i]) * 100), 2),
-                'sharpe_ratio': round(_safe_val(float(sharpe_ratios.iloc[i])), 2),
-                'max_drawdown_pct': round(_safe_val(float(max_drawdowns.iloc[i]) * 100), 2),
-                'total_trades': int(_safe_val(float(trade_counts.iloc[i]))),
+                'total_return_pct': bt['total_return_pct'],
+                'sharpe_ratio': bt['sharpe_ratio'],
+                'max_drawdown_pct': round(-abs(bt['max_drawdown_pct']), 2),
+                'total_trades': bt['total_trades'],
             })
 
         # Sort by Sharpe ratio descending
@@ -730,18 +758,20 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
         tickers = [t.strip().upper() for t in ticker.split(',')]
         if len(tickers) > 1:
             return {'success': False, 'error': 'Walk-Forward saat ini hanya mendukung Single Ticker.'}
-            
+
         clean_ticker = _normalize_ticker(tickers[0])
 
         stock = yf.Ticker(clean_ticker)
         try:
             hist = stock.history(period=period)
-        except (TypeError, KeyError, ValueError) as e:
+        except (TypeError, KeyError, ValueError):
             return {'success': False, 'error': f'No data available for {clean_ticker}. Ticker may be invalid or delisted.'}
         if hist.empty or len(hist) < 100:
             return {'success': False, 'error': f'Insufficient data for {clean_ticker} (need 100+ days)'}
 
         closes = hist['Close']
+        if isinstance(closes, pd.DataFrame):
+            closes = closes.iloc[:, 0]
 
         # Split into train/test
         split_idx = int(len(closes) * train_pct / 100)
@@ -754,22 +784,15 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
         fees = fees_pct / 100
 
         # ── Phase 1: Optimize on training data ──
-        entries_list = []
-        exits_list = []
         combos = []
 
         if strategy_type == 'rsi':
             entry_vals = param_ranges.get('rsi_entry', [30])
             exit_vals = param_ranges.get('rsi_exit', [70])
             rsi_period = int(param_ranges.get('rsi_period', [14])[0]) if isinstance(param_ranges.get('rsi_period'), list) else 14
-            rsi = _compute_rsi(train_closes, rsi_period)
             for ev, xv in product(entry_vals, exit_vals):
                 if ev >= xv:
                     continue
-                e = ((rsi < ev) & (rsi.shift(1) >= ev)).fillna(False)
-                x = ((rsi > xv) & (rsi.shift(1) <= xv)).fillna(False)
-                entries_list.append(e)
-                exits_list.append(x)
                 combos.append({'rsi_period': rsi_period, 'rsi_entry': ev, 'rsi_exit': xv})
 
         elif strategy_type == 'macd':
@@ -779,11 +802,6 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
             for f, s, sig in product(fast_vals, slow_vals, signal_vals):
                 if f >= s:
                     continue
-                ml, sl, _ = _compute_macd(train_closes, f, s, sig)
-                e = ((ml > sl) & (ml.shift(1) <= sl.shift(1))).fillna(False)
-                x = ((ml < sl) & (ml.shift(1) >= sl.shift(1))).fillna(False)
-                entries_list.append(e)
-                exits_list.append(x)
                 combos.append({'macd_fast': f, 'macd_slow': s, 'macd_signal': sig})
 
         elif strategy_type == 'ema_cross':
@@ -792,26 +810,12 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
             for sv, lv in product(short_vals, long_vals):
                 if sv >= lv:
                     continue
-                es = _compute_ema(train_closes, sv)
-                el = _compute_ema(train_closes, lv)
-                e = ((es > el) & (es.shift(1) <= el.shift(1))).fillna(False)
-                x = ((es < el) & (es.shift(1) >= el.shift(1))).fillna(False)
-                entries_list.append(e)
-                exits_list.append(x)
                 combos.append({'ema_short': sv, 'ema_long': lv})
 
         elif strategy_type == 'bollinger':
             period_vals = param_ranges.get('bb_period', [20])
             std_vals = param_ranges.get('bb_std', [2.0])
             for p, sd in product(period_vals, std_vals):
-                mid = train_closes.rolling(p).mean()
-                std_s = train_closes.rolling(p).std()
-                lower = mid - sd * std_s
-                upper = mid + sd * std_s
-                e = ((train_closes < lower) & (train_closes.shift(1) >= lower.shift(1))).fillna(False)
-                x = ((train_closes > upper) & (train_closes.shift(1) <= upper.shift(1))).fillna(False)
-                entries_list.append(e)
-                exits_list.append(x)
                 combos.append({'bb_period': p, 'bb_std': sd})
         else:
             return {'success': False, 'error': f'Walk-forward not supported for: {strategy_type}'}
@@ -819,32 +823,41 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
         if not combos:
             return {'success': False, 'error': 'No valid parameter combinations'}
 
-        # Vectorized training simulation
-        all_entries = pd.concat(entries_list, axis=1).astype(bool)
-        all_exits = pd.concat(exits_list, axis=1).astype(bool)
-        pf_train = vbt.Portfolio.from_signals(
-            train_closes, all_entries, all_exits,
-            init_cash=initial_capital, fees=fees, freq='1D'
-        )
+        # Run backtest for each combo on training data
+        best_sharpe = -999
+        best_idx = 0
+        train_results = []
 
-        # Find best combo by Sharpe
-        sharpes = pf_train.sharpe_ratio()
-        best_idx = int(sharpes.argmax()) if not sharpes.isna().all() else 0
+        for i, combo in enumerate(combos):
+            entries, exits = _generate_signals(train_closes, strategy_type, combo)
+            if not entries.any():
+                train_results.append({
+                    'total_return_pct': 0, 'sharpe_ratio': 0,
+                    'max_drawdown_pct': 0, 'total_trades': 0,
+                    'equity': pd.Series([initial_capital, initial_capital],
+                                       index=[train_closes.index[0], train_closes.index[-1]]),
+                })
+                continue
+
+            bt = _run_pandas_backtest(train_closes, entries, exits, initial_capital, fees)
+            train_results.append(bt)
+            if bt['sharpe_ratio'] > best_sharpe:
+                best_sharpe = bt['sharpe_ratio']
+                best_idx = i
+
         best_combo = combos[best_idx]
+        best_train = train_results[best_idx]
 
         # In-sample metrics
-        in_return = round(_safe_val(float(pf_train.total_return().iloc[best_idx]) * 100), 2)
-        in_sharpe = round(_safe_val(float(sharpes.iloc[best_idx])), 2)
-        in_dd = round(_safe_val(float(pf_train.max_drawdown().iloc[best_idx]) * 100), 2)
-        in_trades = int(_safe_val(float(pf_train.trades.count().iloc[best_idx])))
+        in_return = best_train['total_return_pct']
+        in_sharpe = best_train['sharpe_ratio']
+        in_dd = best_train['max_drawdown_pct']
+        in_trades = best_train['total_trades']
 
         # In-sample equity curve
-        in_equity = pf_train.value().iloc[:, best_idx]
-        if len(in_equity) > 300:
-            step = max(1, len(in_equity) // 300)
-            in_eq_s = in_equity.iloc[::step]
-        else:
-            in_eq_s = in_equity
+        in_equity = best_train['equity']
+        in_step = max(1, len(in_equity) // 300) if len(in_equity) > 300 else 1
+        in_eq_s = in_equity.iloc[::in_step]
         in_eq_data = {
             'dates': [d.strftime('%Y-%m-%d') for d in in_eq_s.index],
             'values': [round(_safe_val(v), 0) for v in in_eq_s.values],
@@ -864,22 +877,15 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
                 'values': [initial_capital, initial_capital],
             }
         else:
-            pf_test = vbt.Portfolio.from_signals(
-                test_closes, test_entries, test_exits,
-                init_cash=initial_capital, fees=fees, freq='1D'
-            )
-            test_stats = pf_test.stats()
-            out_return = round(_safe_val(test_stats.get('Total Return [%]', 0)), 2)
-            out_sharpe = round(_safe_val(test_stats.get('Sharpe Ratio', 0)), 2)
-            out_dd = round(_safe_val(test_stats.get('Max Drawdown [%]', 0)), 2)
-            out_trades = int(_safe_val(test_stats.get('Total Trades', 0)))
+            bt_test = _run_pandas_backtest(test_closes, test_entries, test_exits, initial_capital, fees)
+            out_return = bt_test['total_return_pct']
+            out_sharpe = bt_test['sharpe_ratio']
+            out_dd = bt_test['max_drawdown_pct']
+            out_trades = bt_test['total_trades']
 
-            out_equity = pf_test.value()
-            if len(out_equity) > 300:
-                step = max(1, len(out_equity) // 300)
-                out_eq_s = out_equity.iloc[::step]
-            else:
-                out_eq_s = out_equity
+            out_equity = bt_test['equity']
+            out_step = max(1, len(out_equity) // 300) if len(out_equity) > 300 else 1
+            out_eq_s = out_equity.iloc[::out_step]
             out_eq_data = {
                 'dates': [d.strftime('%Y-%m-%d') for d in out_eq_s.index],
                 'values': [round(_safe_val(v), 0) for v in out_eq_s.values],
@@ -927,5 +933,3 @@ def run_walk_forward(ticker, strategy_type, param_ranges, period='3y',
     except Exception as e:
         logger.exception(f"Walk-forward error for {ticker}")
         return {'success': False, 'error': str(e)}
-
-

@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 
 import requests
@@ -552,7 +553,7 @@ def _analyze_gemini(texts):
 
 def _analyze_groq(texts):
     """Analyze sentiment using Moonshot AI via Groq API (with fallback key)."""
-    api_keys = [k for k in [Config.GROQ_API_KEY, Config.GROQ_API_KEY_2] if k]
+    api_keys = [k for k in [Config.GROQ_API_KEY, Config.GROQ_API_KEY_2, Config.GROQ_API_KEY_3] if k]
     if not api_keys:
         return None
 
@@ -691,7 +692,7 @@ def _generate_insight(ticker, company_name, analyzed_articles, summary_data):
 
 def _try_insight_groq(prompt):
     """Try generating insight via Groq."""
-    api_keys = [k for k in [Config.GROQ_API_KEY, Config.GROQ_API_KEY_2] if k]
+    api_keys = [k for k in [Config.GROQ_API_KEY, Config.GROQ_API_KEY_2, Config.GROQ_API_KEY_3] if k]
     if not api_keys:
         return None
     try:
@@ -775,35 +776,44 @@ def get_sentiment_analysis(ticker):
         logger.info(f"Fetching sentiment for {ticker} (name: {company_name}, "
                     f"idx={ctx['is_idx']}, index={ctx['is_index']})")
 
-        # ── Fetch from all sources ──
-        all_articles = []
+        # ── Fetch from all sources in parallel ──
+        futures = {}
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            # 1. yfinance news (always relevant — ticker-bound)
+            if not ctx['is_index']:
+                futures[executor.submit(_fetch_yfinance_news, ticker)] = 'yfinance'
 
-        # 1. yfinance news (always relevant — ticker-bound)
-        if not ctx['is_index']:  # yfinance news doesn't work well for indices
-            all_articles.extend(_fetch_yfinance_news(ticker))
+            # 2. GNews — with dynamic locale and 7-day window
+            futures[executor.submit(
+                _fetch_gnews, ctx['gnews_query'], 8,
+                ctx['gnews_lang'], ctx['gnews_country']
+            )] = 'gnews'
 
-        # 2. GNews — with dynamic locale and 7-day window
-        all_articles.extend(_fetch_gnews(
-            ctx['gnews_query'], max_results=8,
-            lang=ctx['gnews_lang'], country=ctx['gnews_country']
-        ))
+            # 3. Marketaux (works with ticker symbols, pass full ticker)
+            if not ctx['is_index']:
+                futures[executor.submit(_fetch_marketaux, ticker)] = 'marketaux'
 
-        # 3. Marketaux (works with ticker symbols)
-        if not ctx['is_index']:  # Marketaux doesn't support index symbols
-            all_articles.extend(_fetch_marketaux(ticker))
+            # 4. Finnhub (US tickers only — doesn't support IDX)
+            if not ctx['is_index'] and not ctx['is_idx']:
+                futures[executor.submit(_fetch_finnhub, ticker)] = 'finnhub'
 
-        # 4. Finnhub (works best with US tickers)
-        if not ctx['is_index']:
-            finnhub_ticker = ticker_clean if ctx['is_idx'] else ticker
-            all_articles.extend(_fetch_finnhub(finnhub_ticker))
+            # 5. newsapi.ai — use company/index name for broader search
+            newsapi_query = company_name if company_name else ticker_clean
+            futures[executor.submit(_fetch_newsapi_ai, newsapi_query, 8)] = 'newsapi'
 
-        # 5. newsapi.ai — use company/index name for broader search
-        newsapi_query = company_name if company_name else ticker_clean
-        all_articles.extend(_fetch_newsapi_ai(newsapi_query, max_results=8))
+            # 6. Web scrapers (only for IDX stocks/indices)
+            if ctx['is_idx']:
+                futures[executor.submit(_fetch_scraped_news, ctx['scrape_query'], 3)] = 'scraper'
 
-        # 6. Web scrapers (only for IDX stocks/indices)
-        if ctx['is_idx']:
-            all_articles.extend(_fetch_scraped_news(ctx['scrape_query'], max_per_source=3))
+            # Collect results
+            all_articles = []
+            for future in as_completed(futures):
+                source_name = futures[future]
+                try:
+                    articles = future.result(timeout=20)
+                    all_articles.extend(articles)
+                except Exception as e:
+                    logger.warning(f"Fetcher '{source_name}' failed: {e}")
 
         # ── Deduplicate ──
         unique_articles = _deduplicate(all_articles)
@@ -845,6 +855,13 @@ def get_sentiment_analysis(ticker):
         ]
         analysis_results, model_used = _run_sentiment_analysis(texts)
 
+        # Warn if mismatch
+        if len(analysis_results) != len(texts):
+            logger.warning(
+                f"LLM returned {len(analysis_results)} results for {len(texts)} inputs. "
+                f"Some sentiments may be mismatched."
+            )
+
         # ── Merge results into articles ──
         analyzed_articles = []
         for i, article in enumerate(filtered_articles):
@@ -869,9 +886,14 @@ def get_sentiment_analysis(ticker):
                 'mx_sentiment': round(float(mx_score), 3) if mx_score is not None else None,
             })
 
-        # ── Compute Summary ──
-        scores = [a['sentiment_score'] for a in analyzed_articles]
-        overall_score = round(sum(scores) / len(scores), 3) if scores else 0
+        # Confidence-weighted overall score
+        total_weight = 0
+        weighted_sum = 0
+        for a in analyzed_articles:
+            conf = max(a['confidence'], 1)  # min weight of 1
+            weighted_sum += a['sentiment_score'] * conf
+            total_weight += conf
+        overall_score = round(weighted_sum / total_weight, 3) if total_weight > 0 else 0
 
         bullish = sum(1 for a in analyzed_articles if a['sentiment_label'] == 'Bullish')
         bearish = sum(1 for a in analyzed_articles if a['sentiment_label'] == 'Bearish')

@@ -333,7 +333,7 @@
     <div class="bt-header">
         <div class="bt-header__badge">● 🔬 BACKTESTING ENGINE</div>
         <h1 class="bt-header__title">Strategy Backtester</h1>
-        <p class="bt-header__subtitle">Uji strategi trading pada data historis saham IDX, internasional, dan indeks dengan VectorBT</p>
+        <p class="bt-header__subtitle">Uji strategi trading pada data historis saham IDX, internasional, dan indeks</p>
     </div>
 
     <div class="bt-layout">
@@ -342,8 +342,8 @@
             <div class="bt-panel__title">⚙️ Strategy Builder</div>
 
             <div class="bt-field">
-                <label class="bt-field__label">Ticker <small style="color:var(--text-sec); font-weight:normal;">(Saham IDX/Intl/Indeks, pisahkan koma)</small></label>
-                <input type="text" class="bt-field__input" id="btTicker" placeholder="BBCA, AAPL, IHSG, SPX" value="BBCA">
+                <label class="bt-field__label">Ticker <small style="color:var(--text-sec); font-weight:normal;">(Saham IDX pakai .JK, pisahkan koma)</small></label>
+                <input type="text" class="bt-field__input" id="btTicker" placeholder="BBCA.JK, AAPL, IHSG" value="BBCA.JK">
             </div>
 
             <div class="bt-field">
@@ -636,8 +636,12 @@ def custom_strategy(hist):
         currentStrategy = type;
         document.querySelectorAll('.bt-tab').forEach(t => t.classList.remove('bt-tab--active'));
         document.querySelectorAll('.bt-params').forEach(p => p.classList.remove('bt-params--active'));
-        event.target.classList.add('bt-tab--active');
+        event.currentTarget.classList.add('bt-tab--active');
         document.getElementById('params_' + type).classList.add('bt-params--active');
+        // Disable opt/wf for unsupported strategies
+        const supportsOpt = !['custom', 'combined'].includes(type);
+        document.getElementById('btOptBtn').disabled = !supportsOpt;
+        document.getElementById('btWfBtn').disabled = !supportsOpt;
     }
 
     function getStrategyParams() {
@@ -672,6 +676,24 @@ def custom_strategy(hist):
         const ticker = document.getElementById('btTicker').value.trim().toUpperCase();
         if (!ticker) return alert('Masukkan ticker');
 
+        // Frontend validation
+        const params = getStrategyParams();
+        if (currentStrategy === 'rsi' && params.rsi_entry >= params.rsi_exit) {
+            return alert('RSI Entry harus lebih kecil dari RSI Exit');
+        }
+        if (currentStrategy === 'macd' && params.macd_fast >= params.macd_slow) {
+            return alert('MACD Fast harus lebih kecil dari MACD Slow');
+        }
+        if (currentStrategy === 'ema_cross' && params.ema_short >= params.ema_long) {
+            return alert('Short EMA harus lebih kecil dari Long EMA');
+        }
+        if (currentStrategy === 'combined' && params.rsi_entry >= params.rsi_exit) {
+            return alert('RSI Entry harus lebih kecil dari RSI Exit');
+        }
+        if (currentStrategy === 'combined' && params.macd_fast >= params.macd_slow) {
+            return alert('MACD Fast harus lebih kecil dari MACD Slow');
+        }
+
         const btn = document.getElementById('btRunBtn');
         const loadingEl = document.getElementById('btLoading');
         const errorEl = document.getElementById('btError');
@@ -689,7 +711,7 @@ def custom_strategy(hist):
             const body = {
                 ticker,
                 strategy_type: currentStrategy,
-                params: getStrategyParams(),
+                params: params,
                 period: document.getElementById('btPeriod').value,
                 initial_capital: +document.getElementById('btCapital').value,
                 fees_pct: +document.getElementById('btFees').value,
@@ -712,6 +734,11 @@ def custom_strategy(hist):
             }
 
             if (data.message) { msgEl.textContent = 'ℹ️ ' + data.message; msgEl.style.display = 'block'; }
+
+            // Update ticker input with resolved ticker (e.g., BBCA → BBCA.JK)
+            if (data.resolved_ticker) {
+                document.getElementById('btTicker').value = data.resolved_ticker;
+            }
 
             resultsEl.style.display = 'block';
 
@@ -783,8 +810,8 @@ def custom_strategy(hist):
                 pointRadius: 0,
             });
         }
-        // Use the longer date array
-        const labels = eq.dates.length >= (bm?.dates?.length || 0) ? eq.dates : bm.dates;
+        // Always use equity dates as labels for correct alignment
+        const labels = eq.dates;
         charts.equity = new Chart(ctx, {
             type: 'line',
             data: { labels, datasets },
@@ -853,10 +880,10 @@ def custom_strategy(hist):
             },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtRp(c.raw) } } },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtMoney(c.raw) } } },
                 scales: {
                     x: { ticks: { color: '#6b7280', maxTicksLimit: 8, font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
-                    y: { ticks: { color: '#6b7280', font: { size: 9 }, callback: v => fmtRp(v) }, grid: { color: 'rgba(255,255,255,0.03)' } },
+                    y: { ticks: { color: '#6b7280', font: { size: 9 }, callback: v => fmtMoney(v) }, grid: { color: 'rgba(255,255,255,0.03)' } },
                 },
             },
         });
@@ -903,11 +930,11 @@ def custom_strategy(hist):
             return `<tr>
                 <td>${i + 1}</td>
                 <td>${t.entry_date}</td>
-                <td>${fmtRp(t.entry_price)}</td>
+                <td>${fmtMoney(t.entry_price)}</td>
                 <td>${t.exit_date}</td>
-                <td>${fmtRp(t.exit_price)}</td>
+                <td>${fmtMoney(t.exit_price)}</td>
                 <td>${Math.round(t.size)}</td>
-                <td style="${cls}font-weight:700;">${fmtRp(t.pnl)}</td>
+                <td style="${cls}font-weight:700;">${fmtMoney(t.pnl)}</td>
                 <td style="${cls}font-weight:700;">${t.return_pct >= 0 ? '+' : ''}${t.return_pct}%</td>
             </tr>`;
         }).join('');
@@ -1166,7 +1193,7 @@ def custom_strategy(hist):
             },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtRp(c.raw.y) } } },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtMoney(c.raw.y) } } },
                 scales: {
                     x: { type: 'category', labels: [...data.in_sample_equity.dates, ...data.out_of_sample_equity.dates], ticks: { color: '#6b7280', maxTicksLimit: 10, font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
                     y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => (v/1e6).toFixed(0)+'M' }, grid: { color: 'rgba(255,255,255,0.03)' } },

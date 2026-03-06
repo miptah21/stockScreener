@@ -441,12 +441,12 @@
     <div class="sa-header">
         <div class="sa-header__badge">● 🧠 AI SENTIMENT ANALYSIS</div>
         <h1 class="sa-header__title">News Sentiment Analyzer</h1>
-        <p class="sa-header__subtitle">Analisis sentimen berita saham dari 6 sumber menggunakan AI (Claude / Gemini / VADER)</p>
+        <p class="sa-header__subtitle">Analisis sentimen berita saham dari 6 sumber menggunakan AI (Claude / Gemini / Groq / VADER)</p>
     </div>
 
     <!-- Search Bar -->
     <div class="sa-search">
-        <input type="text" class="sa-search__input" id="saTicker" placeholder="Masukkan ticker (contoh: BBCA, AAPL, IHSG, SPX)" value="">
+        <input type="text" class="sa-search__input" id="saTicker" placeholder="Masukkan ticker (contoh: BBCA.JK, AAPL, IHSG, SPX)" value="">
         <button class="sa-search__btn" id="saBtn" onclick="analyzeSentiment()">🧠 Analyze</button>
     </div>
 
@@ -524,9 +524,6 @@
             'FTSE': '^FTSE', 'DAX': '^GDAXI',
         };
         let ticker = INDEX_ALIASES[raw] || raw;
-        if (!ticker.includes('.') && !ticker.startsWith('^') && /^[A-Z]{4}$/.test(ticker)) {
-            ticker += '.JK';
-        }
 
         const btn = document.getElementById('saBtn');
         const loadEl = document.getElementById('saLoading');
