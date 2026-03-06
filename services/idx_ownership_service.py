@@ -34,10 +34,10 @@ def _find_latest_csv(pattern):
 
 def _parse_id_number(val):
     """Parse Indonesian-formatted number (e.g., '3.200.142.830' or '41,10') to float."""
-    if val is None or val == '' or val == 'None':
+    if pd.isna(val) or val is None or val == '' or val == 'None' or val == 'nan':
         return None
     s = str(val).strip()
-    if not s:
+    if not s or s.lower() == 'nan':
         return None
     # Remove thousand separators (dots) if the number uses Indonesian format
     # Check if it uses comma as decimal separator
@@ -77,6 +77,10 @@ def load_1persen_data(force_reload=False):
     df['TOTAL_SHARES'] = df['TOTAL_HOLDING_SHARES'].apply(_parse_id_number)
     df['PCT'] = df['PERCENTAGE'].apply(_parse_id_number)
 
+    # Replace all NaN values with None after columns are created (prevents 'NaN' in JSON response)
+    df = df.replace({float('nan'): None, pd.NA: None})
+    df = df.where(pd.notna(df), None)
+
     _cache_1persen = df
     _cache_1persen_path = csv_path
     logger.info("Loaded 1%% data: %d rows", len(df))
@@ -105,6 +109,10 @@ def load_5persen_data(force_reload=False):
     # Parse the 'Perubahan' column
     if 'Perubahan' in df.columns:
         df['CHANGE'] = df['Perubahan'].apply(_parse_id_number).fillna(0)
+        
+    # Replace all NaN values with None
+    df = df.replace({float('nan'): None, pd.NA: None})
+    df = df.where(pd.notna(df), None)
 
     _cache_5persen = df
     _cache_5persen_path = csv_path
