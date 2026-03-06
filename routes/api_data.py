@@ -760,3 +760,91 @@ def api_patterns():
         logger.exception("Pattern API error for %s", ticker_symbol)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# ─── IDX Ownership (KSEI Data) ───────────────────────────────────────
+
+@api_data_bp.route('/api/idx-ownership', methods=['GET'])
+def api_idx_ownership():
+    """
+    Return IDX/KSEI shareholder data for a given ticker.
+
+    Query params:
+        ticker (str): Stock code (e.g., BBCA, AADI — without .JK)
+    """
+    from services.idx_ownership_service import get_shareholders
+
+    ticker = _validate_ticker(request.args.get('ticker'))
+    if not ticker:
+        return jsonify({'success': False, 'error': 'Valid ticker is required.'}), 400
+
+    try:
+        data = get_shareholders(ticker)
+        if data is None:
+            return jsonify({
+                'success': False,
+                'error': f'No IDX shareholder data found for {ticker}. '
+                         f'Data only available for IDX-listed stocks.'
+            }), 404
+
+        return jsonify({'success': True, **data})
+    except Exception as e:
+        logger.exception("IDX ownership error for %s", ticker)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_data_bp.route('/api/idx-ownership/changes', methods=['GET'])
+def api_idx_ownership_changes():
+    """
+    Return recent ownership changes from the 5% SID dataset.
+
+    Query params:
+        ticker (str, optional): Filter by stock code
+    """
+    from services.idx_ownership_service import get_ownership_changes
+
+    ticker = request.args.get('ticker', '').strip() or None
+    if ticker:
+        ticker = _validate_ticker(ticker)
+        if not ticker:
+            return jsonify({'success': False, 'error': 'Invalid ticker format.'}), 400
+
+    try:
+        changes = get_ownership_changes(ticker=ticker, min_change=0)
+        return jsonify({
+            'success': True,
+            'total': len(changes),
+            'changes': changes,
+        })
+    except Exception as e:
+        logger.exception("IDX ownership changes error")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_data_bp.route('/api/idx-ownership/search', methods=['GET'])
+def api_idx_ownership_search():
+    """
+    Search for an investor by name across all IDX tickers.
+
+    Query params:
+        q (str): Investor name search query
+    """
+    from services.idx_ownership_service import search_investor
+
+    query = request.args.get('q', '').strip()
+    if not query or len(query) < 2:
+        return jsonify({
+            'success': False,
+            'error': 'Search query must be at least 2 characters.'
+        }), 400
+
+    try:
+        results = search_investor(query, limit=50)
+        return jsonify({
+            'success': True,
+            'query': query,
+            'total': len(results),
+            'results': results,
+        })
+    except Exception as e:
+        logger.exception("IDX investor search error")
+        return jsonify({'success': False, 'error': str(e)}), 500

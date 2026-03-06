@@ -79,3 +79,9 @@ def compare_page():
 def pattern_recognition_page():
     """Serve the Pattern Recognition page."""
     return render_template('pattern_recognition.html', active_page='patterns')
+
+
+@pages_bp.route('/idx-ownership')
+def idx_ownership_page():
+    """Serve the IDX Shareholder (KSEI) page."""
+    return render_template('idx_ownership.html', active_page='idx-ownership')

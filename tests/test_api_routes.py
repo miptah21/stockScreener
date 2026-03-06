@@ -143,3 +143,46 @@ class TestErrorHandlers:
         assert resp.status_code == 404
         data = resp.get_json()
         assert data['success'] is False
+
+
+class TestIdxOwnershipRoutes:
+    """Tests for IDX Ownership (KSEI) endpoints."""
+
+    def test_idx_ownership_page(self, client):
+        resp = client.get('/idx-ownership')
+        assert resp.status_code == 200
+
+    def test_idx_ownership_missing_ticker(self, client):
+        resp = client.get('/api/idx-ownership')
+        assert resp.status_code == 400
+
+    def test_idx_ownership_valid_ticker(self, client):
+        resp = client.get('/api/idx-ownership?ticker=BBCA')
+        # Could be 200 (found) or 404 (no CSV data)
+        assert resp.status_code in (200, 404)
+        data = resp.get_json()
+        if resp.status_code == 200:
+            assert data['success'] is True
+            assert 'shareholders' in data
+
+    def test_idx_ownership_changes(self, client):
+        resp = client.get('/api/idx-ownership/changes')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success'] is True
+        assert 'changes' in data
+
+    def test_idx_ownership_search_missing_query(self, client):
+        resp = client.get('/api/idx-ownership/search')
+        assert resp.status_code == 400
+
+    def test_idx_ownership_search_short_query(self, client):
+        resp = client.get('/api/idx-ownership/search?q=A')
+        assert resp.status_code == 400
+
+    def test_idx_ownership_search_valid(self, client):
+        resp = client.get('/api/idx-ownership/search?q=ASTRA')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success'] is True
+        assert 'results' in data

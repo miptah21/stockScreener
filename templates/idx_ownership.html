@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDX Shareholder Data — Pemegang Saham KSEI</title>
+    <meta name="description" content="Data pemegang saham ≥1% dari KSEI. Lihat komposisi kepemilikan, lokal vs asing, dan perubahan kepemilikan terbaru.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.06);
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f0f0f0;
+            --text-secondary: #8b8b9e;
+            --text-muted: #5a5a6e;
+            --accent-blue: #6366f1;
+            --accent-purple: #a855f7;
+            --accent-cyan: #22d3ee;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-orange: #f97316;
+            --gradient-primary: linear-gradient(135deg, #6366f1, #a855f7);
+            --gradient-hero: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.04) 0%, transparent 50%);
+            z-index: 0;
+            animation: bgPulse 15s ease-in-out infinite alternate;
+        }
+        @keyframes bgPulse {
+            0% { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.05) rotate(2deg); }
+        }
+        .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+        /* Navigation */
+        .nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; border-bottom: 1px solid var(--glass-border); margin-bottom: 10px; }
+        .nav__brand { font-size: 16px; font-weight: 700; background: var(--gradient-hero); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-decoration: none; }
+        .nav__links { display: flex; gap: 8px; flex-wrap: wrap; }
+        .nav__link { padding: 8px 20px; border-radius: 100px; font-size: 13px; font-weight: 500; text-decoration: none; transition: var(--transition); }
+        .nav__link--default { color: var(--text-secondary); background: var(--glass); border: 1px solid var(--glass-border); }
+        .nav__link--default:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+        .nav__link--active { color: white; background: var(--gradient-primary); border: 1px solid transparent; }
+        .nav__dropdown { position: relative; display: inline-block; }
+        .nav__dropdown-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+        .nav__dropdown-menu {
+            position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(10px);
+            background: var(--bg-secondary); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm); padding: 8px; min-width: 180px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5), var(--shadow-glow);
+            backdrop-filter: blur(20px); opacity: 0; visibility: hidden;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 9999;
+        }
+        .nav__dropdown:hover .nav__dropdown-menu, .nav__dropdown:focus-within .nav__dropdown-menu { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+        .nav__dropdown-arrow { display: inline-block; transition: transform 0.2s; font-size: 10px; }
+        .nav__dropdown:hover .nav__dropdown-arrow { transform: rotate(180deg); }
+        .nav__dropdown-item { display: flex; align-items: center; gap: 8px; padding: 10px 14px; color: var(--text-secondary); text-decoration: none; font-size: 13px; font-weight: 500; border-radius: 8px; transition: var(--transition); }
+        .nav__dropdown-item:hover { background: var(--glass); color: var(--text-primary); }
+        .nav__dropdown-item--active { background: rgba(99,102,241,0.1); color: var(--accent-blue); font-weight: 600; }
+
+        /* Header */
+        .header { padding: 40px 0 20px; text-align: center; }
+        .header__badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 100px; font-size: 12px; font-weight: 500; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 20px; animation: fadeInDown 0.6s ease; }
+        .header__badge::before { content: ''; width: 6px; height: 6px; background: var(--accent-emerald); border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .header h1 { font-size: 42px; font-weight: 800; background: var(--gradient-hero); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 12px; animation: fadeInDown 0.6s ease 0.1s both; }
+        .header p { color: var(--text-secondary); font-size: 16px; max-width: 650px; margin: 0 auto; line-height: 1.6; animation: fadeInDown 0.6s ease 0.2s both; }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+        .animate-in { opacity: 0; transform: translateY(20px); animation: slideUp 0.5s ease forwards; }
+
+        /* Tabs */
+        .tab-bar { display: flex; gap: 4px; justify-content: center; margin-bottom: 28px; background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 6px; max-width: 500px; margin-left: auto; margin-right: auto; }
+        .tab-btn { flex: 1; padding: 10px 20px; border: none; border-radius: 12px; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: var(--transition); background: transparent; color: var(--text-secondary); }
+        .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+        .tab-btn.active { color: white; background: var(--gradient-primary); box-shadow: 0 4px 15px rgba(99,102,241,0.3); }
+
+        /* Search */
+        .search-section { padding: 10px 0 30px; animation: fadeInDown 0.6s ease 0.3s both; }
+        .search-box { display: flex; gap: 12px; max-width: 600px; margin: 0 auto; }
+        .search-input { flex: 1; padding: 16px 24px; background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 500; outline: none; transition: var(--transition); backdrop-filter: blur(20px); }
+        .search-input::placeholder { color: var(--text-muted); }
+        .search-input:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(99,102,241,0.15), var(--shadow-glow); }
+        .search-btn { padding: 16px 32px; background: var(--gradient-primary); border: none; border-radius: var(--radius); color: white; font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; transition: var(--transition); white-space: nowrap; }
+        .search-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(99,102,241,0.35); }
+        .search-btn:active { transform: translateY(0); }
+        .search-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .search-hints { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+        .hint-chip { padding: 5px 14px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 100px; font-size: 12px; color: var(--text-secondary); cursor: pointer; transition: var(--transition); }
+        .hint-chip:hover { background: var(--bg-card-hover); color: var(--accent-cyan); border-color: rgba(34,211,238,0.3); }
+
+        /* Loading & Error */
+        .loading { display: none; text-align: center; padding: 60px 0; }
+        .loading.active { display: block; }
+        .spinner { width: 48px; height: 48px; border: 3px solid var(--glass-border); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading p { color: var(--text-secondary); font-size: 14px; }
+        .error-box { display: none; max-width: 600px; margin: 24px auto; padding: 20px 24px; background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.2); border-radius: var(--radius-sm); color: var(--accent-rose); font-size: 14px; text-align: center; }
+        .error-box.active { display: block; animation: fadeIn 0.4s ease; }
+
+        /* Results */
+        .results { display: none; padding-bottom: 80px; }
+        .results.active { display: block; animation: fadeIn 0.5s ease; }
+
+        /* Company Card */
+        .company-card { background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 32px; margin-bottom: 32px; backdrop-filter: blur(20px); position: relative; overflow: hidden; }
+        .company-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--gradient-hero); }
+        .company-card__header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+        .company-card__name { font-size: 28px; font-weight: 700; }
+        .company-card__ticker { display: inline-block; padding: 4px 12px; background: var(--gradient-primary); border-radius: 6px; font-size: 13px; font-weight: 600; margin-left: 12px; vertical-align: middle; }
+        .company-card__meta { display: flex; gap: 24px; margin-top: 12px; flex-wrap: wrap; font-size: 14px; color: var(--text-secondary); }
+        .company-card__meta strong { color: var(--text-primary); font-weight: 600; }
+        .company-card__date-block { text-align: right; }
+        .company-card__date-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .company-card__date { font-size: 20px; font-weight: 700; color: var(--accent-cyan); }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 24px; transition: var(--transition); backdrop-filter: blur(20px); }
+        .stat-card:hover { background: var(--bg-card-hover); transform: translateY(-4px); box-shadow: var(--shadow-glow); }
+        .stat-card__icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 16px; }
+        .stat-card__label { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card__value { font-size: 28px; font-weight: 700; }
+        .stat-card__sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+        /* Chart Row */
+        .chart-row { display: grid; grid-template-columns: 380px 1fr; gap: 24px; margin-bottom: 32px; }
+        .chart-card { background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 32px; backdrop-filter: blur(20px); position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .chart-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan)); }
+        .chart-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 24px; text-align: center; width: 100%; }
+        .chart-canvas-wrap { width: 280px; height: 280px; position: relative; }
+        .chart-center-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+        .chart-center-label__pct { font-size: 28px; font-weight: 800; color: var(--text-primary); }
+        .chart-center-label__sub { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .chart-legend-card { background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 32px; backdrop-filter: blur(20px); display: flex; flex-direction: column; justify-content: center; gap: 12px; position: relative; overflow: hidden; }
+        .chart-legend-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue)); }
+        .chart-legend-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); transition: var(--transition); }
+        .legend-item:hover { background: rgba(255,255,255,0.05); }
+        .legend-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+        .legend-label { font-size: 14px; color: var(--text-secondary); flex: 1; }
+        .legend-value { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+
+        /* Section Title */
+        .section-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .section-title::before { content: ''; width: 4px; height: 24px; background: var(--gradient-primary); border-radius: 2px; }
+
+        /* Data Tables */
+        .table-card { background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); overflow: hidden; backdrop-filter: blur(20px); margin-bottom: 32px; }
+        .table-card__header { padding: 20px 24px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .table-card__empty { padding: 40px 24px; text-align: center; color: var(--text-muted); font-size: 14px; }
+        .table-filter { padding: 8px 16px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 13px; outline: none; }
+        .table-filter:focus { border-color: var(--accent-blue); }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table thead th { padding: 12px 20px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--glass-border); background: rgba(255,255,255,0.02); cursor: pointer; user-select: none; transition: var(--transition); }
+        .data-table thead th:hover { color: var(--accent-cyan); }
+        .data-table thead th.sorted-asc::after { content: ' ▲'; font-size: 9px; }
+        .data-table thead th.sorted-desc::after { content: ' ▼'; font-size: 9px; }
+        .data-table tbody td { padding: 14px 20px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text-secondary); }
+        .data-table tbody tr { transition: var(--transition); }
+        .data-table tbody tr:hover { background: var(--bg-card-hover); }
+        .data-table tbody td:first-child { font-weight: 600; color: var(--text-primary); }
+        .data-table .positive { color: var(--accent-emerald) !important; }
+        .data-table .negative { color: var(--accent-rose) !important; }
+
+        /* Badges */
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
+        .badge--local { background: rgba(16,185,129,0.15); color: var(--accent-emerald); }
+        .badge--foreign { background: rgba(249,115,22,0.15); color: var(--accent-orange); }
+        .badge--cp { background: rgba(99,102,241,0.15); color: var(--accent-blue); }
+        .badge--id { background: rgba(168,85,247,0.15); color: var(--accent-purple); }
+        .badge--other { background: rgba(255,255,255,0.08); color: var(--text-secondary); }
+
+        /* Investor Search */
+        .investor-results { display: none; }
+        .investor-results.active { display: block; animation: fadeIn 0.5s ease; }
+
+        /* Footer */
+        .footer { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--glass-border); }
+        .footer a { color: var(--accent-blue); text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } .chart-canvas-wrap { width: 240px; height: 240px; } }
+        @media (max-width: 768px) { .header h1 { font-size: 28px; } .search-box { flex-direction: column; } .stats-grid { grid-template-columns: 1fr 1fr; } .data-table { font-size: 12px; } .data-table thead th, .data-table tbody td { padding: 10px 12px; } }
+        @media (max-width: 480px) { .stats-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Nav -->
+    <nav class="nav">
+        <a href="/" class="nav__brand">📊 Finance Scraper</a>
+        <div class="nav__links">
+            <a href="/" class="nav__link nav__link--default">Dashboard</a>
+            <div class="nav__dropdown">
+                <div class="nav__link nav__link--default nav__dropdown-toggle">
+                    🔍 Screeners <span class="nav__dropdown-arrow">▼</span>
+                </div>
+                <div class="nav__dropdown-menu">
+                    <a href="/screening" class="nav__dropdown-item">Fundamental Scrn</a>
+                    <a href="/technical-screening" class="nav__dropdown-item">Technical Scrn</a>
+                    <a href="/simple-screening" class="nav__dropdown-item">RSI & MACD</a>
+                    <a href="/pattern-recognition" class="nav__dropdown-item">🔮 Patterns</a>
+                </div>
+            </div>
+            <div class="nav__dropdown">
+                <div class="nav__link nav__link--active nav__dropdown-toggle">
+                    📊 Data <span class="nav__dropdown-arrow">▼</span>
+                </div>
+                <div class="nav__dropdown-menu">
+                    <a href="/avg-price" class="nav__dropdown-item">Rata-Rata Harga</a>
+                    <a href="/ownership" class="nav__dropdown-item">Ownership (Yahoo)</a>
+                    <a href="/idx-ownership" class="nav__dropdown-item nav__dropdown-item--active">🏛️ IDX Shareholders</a>
+                    <a href="/market-overview" class="nav__dropdown-item">Market Overview</a>
+                    <a href="/compare" class="nav__dropdown-item">📊 Compare</a>
+                </div>
+            </div>
+            <a href="/backtest" class="nav__link nav__link--default">🔬 Backtest</a>
+            <a href="/watchlist" class="nav__link nav__link--default">⭐ Watchlist</a>
+            <a href="/sentiment" class="nav__link nav__link--default">🧠 Sentimen</a>
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header__badge"><span>IDX Shareholder Data · KSEI</span></div>
+        <h1>Pemegang Saham IDX</h1>
+        <p>Data pemegang saham ≥1% dari KSEI dan kepemilikan efek ≥5% berdasarkan SID. Sumber resmi Bursa Efek Indonesia.</p>
+    </header>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('ticker')" id="tabTicker">🔍 Per Saham</button>
+        <button class="tab-btn" onclick="switchTab('investor')" id="tabInvestor">👤 Cari Investor</button>
+    </div>
+
+    <!-- Tab: Ticker Search -->
+    <div id="panelTicker">
+        <section class="search-section">
+            <div class="search-box">
+                <input type="text" id="tickerInput" class="search-input" placeholder="Masukkan kode saham (cth: BBCA, AADI, TLKM)..." autocomplete="off">
+                <button id="searchBtn" class="search-btn" onclick="handleTickerSearch()">🔍 Lihat Data</button>
+            </div>
+            <div class="search-hints">
+                <span class="hint-chip" onclick="quickTicker('BBCA')">BBCA</span>
+                <span class="hint-chip" onclick="quickTicker('BBRI')">BBRI</span>
+                <span class="hint-chip" onclick="quickTicker('TLKM')">TLKM</span>
+                <span class="hint-chip" onclick="quickTicker('BMRI')">BMRI</span>
+                <span class="hint-chip" onclick="quickTicker('AADI')">AADI</span>
+                <span class="hint-chip" onclick="quickTicker('ASII')">ASII</span>
+                <span class="hint-chip" onclick="quickTicker('UNVR')">UNVR</span>
+                <span class="hint-chip" onclick="quickTicker('GOTO')">GOTO</span>
+            </div>
+        </section>
+    </div>
+
+    <!-- Tab: Investor Search -->
+    <div id="panelInvestor" style="display:none;">
+        <section class="search-section">
+            <div class="search-box">
+                <input type="text" id="investorInput" class="search-input" placeholder="Masukkan nama investor (cth: GARIBALDI, TEMASEK, GIC)..." autocomplete="off">
+                <button id="investorBtn" class="search-btn" onclick="handleInvestorSearch()">🔍 Cari</button>
+            </div>
+            <div class="search-hints">
+                <span class="hint-chip" onclick="quickInvestor('GARIBALDI')">GARIBALDI</span>
+                <span class="hint-chip" onclick="quickInvestor('TEMASEK')">TEMASEK</span>
+                <span class="hint-chip" onclick="quickInvestor('DJS KETENAGAKERJAAN')">DJS Ketenagakerjaan</span>
+                <span class="hint-chip" onclick="quickInvestor('PEMERINTAH')">PEMERINTAH</span>
+            </div>
+        </section>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="loading"><div class="spinner"></div><p>Memuat data pemegang saham...</p></div>
+
+    <!-- Error -->
+    <div id="errorBox" class="error-box"></div>
+
+    <!-- Ticker Results -->
+    <div id="results" class="results">
+        <div id="companyCard" class="company-card animate-in"></div>
+        <div class="section-title animate-in" style="animation-delay:0.05s">📊 Ringkasan Kepemilikan</div>
+        <div id="statsGrid" class="stats-grid"></div>
+        <div id="chartRow" class="chart-row animate-in" style="animation-delay:0.2s"></div>
+        <div class="section-title animate-in" style="animation-delay:0.25s">👥 Daftar Pemegang Saham ≥1%</div>
+        <div id="shareholderTable" class="table-card animate-in" style="animation-delay:0.3s"></div>
+        <div id="changesSection" style="display:none">
+            <div class="section-title animate-in" style="animation-delay:0.35s">📈 Perubahan Kepemilikan (Data 5%)</div>
+            <div id="changesTable" class="table-card animate-in" style="animation-delay:0.4s"></div>
+        </div>
+    </div>
+
+    <!-- Investor Results -->
+    <div id="investorResults" class="investor-results">
+        <div class="section-title animate-in">🔍 Hasil Pencarian Investor</div>
+        <div id="investorTable" class="table-card animate-in" style="animation-delay:0.05s"></div>
+    </div>
+
+    <footer class="footer">
+        <p>Data bersumber dari <a href="https://www.idx.co.id" target="_blank">Bursa Efek Indonesia (IDX)</a> via KSEI.</p>
+        <p style="margin-top: 6px;">Built with Flask · © 2026</p>
+    </footer>
+</div>
+
+<script>
+    let ownershipChart = null;
+    let allShareholders = [];
+
+    // ─── Tab switching ─────────────────────────────────────────
+    function switchTab(tab) {
+        const tabs = ['ticker', 'investor'];
+        tabs.forEach(t => {
+            document.getElementById('panel' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
+            document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+        });
+        hideAll();
+    }
+
+    // ─── Event listeners ──────────────────────────────────────
+    document.getElementById('tickerInput').addEventListener('keypress', e => { if (e.key === 'Enter') handleTickerSearch(); });
+    document.getElementById('investorInput').addEventListener('keypress', e => { if (e.key === 'Enter') handleInvestorSearch(); });
+
+    function quickTicker(t) { document.getElementById('tickerInput').value = t; handleTickerSearch(); }
+    function quickInvestor(q) { document.getElementById('investorInput').value = q; handleInvestorSearch(); }
+
+    // ─── Ticker Search ────────────────────────────────────────
+    async function handleTickerSearch() {
+        const ticker = document.getElementById('tickerInput').value.trim().toUpperCase().replace('.JK', '');
+        if (!ticker) { showError('Masukkan kode saham terlebih dahulu.'); return; }
+
+        const btn = document.getElementById('searchBtn');
+        btn.disabled = true; btn.textContent = '⏳ Memuat...';
+        showLoading(true); hideError(); hideAll();
+
+        try {
+            const [ownRes, chgRes] = await Promise.all([
+                fetch(`/api/idx-ownership?ticker=${encodeURIComponent(ticker)}`),
+                fetch(`/api/idx-ownership/changes?ticker=${encodeURIComponent(ticker)}`).catch(() => null)
+            ]);
+            const data = await ownRes.json();
+            if (!data.success) { showError(data.error || 'Data tidak ditemukan.'); return; }
+
+            let changes = [];
+            if (chgRes && chgRes.ok) {
+                const cd = await chgRes.json();
+                if (cd.success) changes = cd.changes || [];
+            }
+
+            renderTickerResults(data, changes);
+        } catch (err) {
+            showError('Gagal terhubung ke server.'); console.error(err);
+        } finally {
+            btn.disabled = false; btn.textContent = '🔍 Lihat Data'; showLoading(false);
+        }
+    }
+
+    // ─── Investor Search ──────────────────────────────────────
+    async function handleInvestorSearch() {
+        const q = document.getElementById('investorInput').value.trim();
+        if (!q || q.length < 2) { showError('Masukkan minimal 2 karakter.'); return; }
+
+        const btn = document.getElementById('investorBtn');
+        btn.disabled = true; btn.textContent = '⏳ Mencari...';
+        showLoading(true); hideError(); hideAll();
+
+        try {
+            const res = await fetch(`/api/idx-ownership/search?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            if (!data.success) { showError(data.error || 'Pencarian gagal.'); return; }
+
+            renderInvestorResults(data);
+        } catch (err) {
+            showError('Gagal terhubung ke server.'); console.error(err);
+        } finally {
+            btn.disabled = false; btn.textContent = '🔍 Cari'; showLoading(false);
+        }
+    }
+
+    // ─── Render: Ticker ───────────────────────────────────────
+    function renderTickerResults(d, changes) {
+        // Company card
+        document.getElementById('companyCard').innerHTML = `
+            <div class="company-card__header">
+                <div>
+                    <div class="company-card__name">
+                        ${d.issuer_name}
+                        <span class="company-card__ticker">${d.ticker}</span>
+                    </div>
+                    <div class="company-card__meta">
+                        <span>👥 Pemegang Saham ≥1%: <strong>${d.total_shareholders}</strong></span>
+                        <span>🏠 Lokal: <strong>${d.local_pct}%</strong></span>
+                        <span>🌍 Asing: <strong>${d.foreign_pct}%</strong></span>
+                    </div>
+                </div>
+                <div class="company-card__date-block">
+                    <div class="company-card__date-label">Tanggal Laporan</div>
+                    <div class="company-card__date">${d.report_date}</div>
+                </div>
+            </div>
+        `;
+
+        // Stats cards
+        const stats = [
+            { icon: '👥', label: 'Total Shareholders', value: d.total_shareholders, sub: 'Pemegang saham ≥1%', bg: 'rgba(99,102,241,0.15)', color: 'var(--accent-blue)' },
+            { icon: '🏠', label: 'Kepemilikan Lokal', value: d.local_pct + '%', sub: 'Investor domestik', bg: 'rgba(16,185,129,0.15)', color: 'var(--accent-emerald)' },
+            { icon: '🌍', label: 'Kepemilikan Asing', value: d.foreign_pct + '%', sub: 'Investor asing', bg: 'rgba(249,115,22,0.15)', color: 'var(--accent-orange)' },
+            { icon: '🎯', label: 'Top 5 Konsentrasi', value: d.top5_concentration + '%', sub: '5 pemegang saham terbesar', bg: 'rgba(168,85,247,0.15)', color: 'var(--accent-purple)' },
+        ];
+        document.getElementById('statsGrid').innerHTML = stats.map((s, i) => `
+            <div class="stat-card animate-in" style="animation-delay:${0.08 + i * 0.04}s">
+                <div class="stat-card__icon" style="background:${s.bg};color:${s.color}">${s.icon}</div>
+                <div class="stat-card__label">${s.label}</div>
+                <div class="stat-card__value" style="color:${s.color}">${s.value}</div>
+                <div class="stat-card__sub">${s.sub}</div>
+            </div>
+        `).join('');
+
+        // Chart
+        renderChart(d);
+
+        // Shareholder table
+        allShareholders = d.shareholders || [];
+        renderShareholderTable(allShareholders);
+
+        // Changes
+        if (changes && changes.length > 0) {
+            document.getElementById('changesSection').style.display = '';
+            renderChangesTable(changes);
+        } else {
+            document.getElementById('changesSection').style.display = 'none';
+        }
+
+        document.getElementById('results').classList.add('active');
+    }
+
+    // ─── Donut Chart ──────────────────────────────────────────
+    function renderChart(d) {
+        const localPct = d.local_pct || 0;
+        const foreignPct = d.foreign_pct || 0;
+        const otherPct = Math.max(0, 100 - localPct - foreignPct);
+
+        // Build type breakdown for legend
+        const types = d.type_breakdown || {};
+        let legendHTML = '';
+        const typeColors = { 'Corporate': '#6366f1', 'Individual': '#a855f7', 'Insurance': '#22d3ee', 'Investment Bank': '#f59e0b', 'Mutual Fund': '#10b981', 'Pension Fund': '#ec4899', 'Securities Company': '#f97316' };
+        Object.entries(types).forEach(([label, info]) => {
+            const color = typeColors[label] || '#8b8b9e';
+            legendHTML += `
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:${color}"></div>
+                    <div class="legend-label">${label}</div>
+                    <div>
+                        <div class="legend-value" style="color:${color}">${info.pct}%</div>
+                        <div style="font-size:11px;color:var(--text-muted)">${info.count} investor</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        document.getElementById('chartRow').innerHTML = `
+            <div class="chart-card">
+                <h3>🌍 Lokal vs Asing</h3>
+                <div class="chart-canvas-wrap">
+                    <canvas id="ownershipCanvas"></canvas>
+                    <div class="chart-center-label">
+                        <div class="chart-center-label__pct">${localPct.toFixed(1)}%</div>
+                        <div class="chart-center-label__sub">Lokal</div>
+                    </div>
+                </div>
+            </div>
+            <div class="chart-legend-card">
+                <h3>Tipe Investor</h3>
+                ${legendHTML || '<div style="color:var(--text-muted)">Data tipe investor tidak tersedia</div>'}
+            </div>
+        `;
+
+        if (ownershipChart) { ownershipChart.destroy(); ownershipChart = null; }
+        const ctx = document.getElementById('ownershipCanvas').getContext('2d');
+        ownershipChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Lokal', 'Asing', 'Lainnya'],
+                datasets: [{
+                    data: [localPct, foreignPct, otherPct],
+                    backgroundColor: ['rgba(16,185,129,0.85)', 'rgba(249,115,22,0.85)', 'rgba(99,102,241,0.5)'],
+                    borderColor: ['#10b981', '#f97316', '#6366f1'],
+                    borderWidth: 2, hoverOffset: 8,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: true, cutout: '68%',
+                plugins: { legend: { display: false }, tooltip: {
+                    backgroundColor: 'rgba(10,10,15,0.95)', titleColor: '#f0f0f0', bodyColor: '#8b8b9e',
+                    borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1, padding: 12, cornerRadius: 10,
+                    callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed.toFixed(2)}%` }
+                }},
+                animation: { animateRotate: true, duration: 1200, easing: 'easeOutQuart' }
+            }
+        });
+    }
+
+    // ─── Shareholder Table ────────────────────────────────────
+    let sortCol = null, sortAsc = true;
+
+    function renderShareholderTable(data) {
+        const el = document.getElementById('shareholderTable');
+        if (!data || data.length === 0) {
+            el.innerHTML = `<div class="table-card__header">👥 Pemegang Saham</div><div class="table-card__empty">Tidak ada data.</div>`;
+            return;
+        }
+
+        const rows = data.map((s, i) => {
+            const lfBadge = s.local_foreign === 'L' ? '<span class="badge badge--local">Lokal</span>'
+                         : s.local_foreign === 'A' ? '<span class="badge badge--foreign">Asing</span>'
+                         : '<span class="badge badge--other">-</span>';
+            const typeBadge = s.investor_type === 'CP' ? '<span class="badge badge--cp">Corporate</span>'
+                           : s.investor_type === 'ID' ? '<span class="badge badge--id">Individual</span>'
+                           : `<span class="badge badge--other">${s.investor_type || '-'}</span>`;
+            return `<tr>
+                <td>${i + 1}</td>
+                <td title="${s.investor_name}">${s.investor_name}</td>
+                <td>${typeBadge}</td>
+                <td>${lfBadge}</td>
+                <td style="text-align:right;font-weight:600">${s.total_shares != null ? Number(s.total_shares).toLocaleString('id-ID') : '-'}</td>
+                <td style="text-align:right;font-weight:700;color:var(--accent-cyan)">${s.percentage != null ? s.percentage.toFixed(2) + '%' : '-'}</td>
+            </tr>`;
+        }).join('');
+
+        el.innerHTML = `
+            <div class="table-card__header">
+                <span>👥 ${data.length} Pemegang Saham</span>
+                <input type="text" class="table-filter" placeholder="Filter nama..." oninput="filterShareholders(this.value)">
+            </div>
+            <div style="overflow-x:auto">
+                <table class="data-table" id="shTable">
+                    <thead><tr>
+                        <th onclick="sortSH(0)">#</th>
+                        <th onclick="sortSH(1)">Nama Investor</th>
+                        <th onclick="sortSH(2)">Tipe</th>
+                        <th onclick="sortSH(3)">Status</th>
+                        <th onclick="sortSH(4)" style="text-align:right">Jumlah Saham</th>
+                        <th onclick="sortSH(5)" style="text-align:right">Persentase</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function filterShareholders(q) {
+        if (!q) { renderShareholderTable(allShareholders); return; }
+        const filtered = allShareholders.filter(s =>
+            s.investor_name.toLowerCase().includes(q.toLowerCase())
+        );
+        renderShareholderTable(filtered);
+    }
+
+    function sortSH(colIdx) {
+        const keys = ['', 'investor_name', 'investor_type', 'local_foreign', 'total_shares', 'percentage'];
+        const key = keys[colIdx];
+        if (!key) return;
+        if (sortCol === colIdx) sortAsc = !sortAsc;
+        else { sortCol = colIdx; sortAsc = true; }
+        allShareholders.sort((a, b) => {
+            let va = a[key], vb = b[key];
+            if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+            va = va || 0; vb = vb || 0;
+            return sortAsc ? va - vb : vb - va;
+        });
+        renderShareholderTable(allShareholders);
+    }
+
+    // ─── Changes Table ────────────────────────────────────────
+    function renderChangesTable(changes) {
+        const el = document.getElementById('changesTable');
+        const rows = changes.map((c, i) => {
+            const changeClass = c.perubahan > 0 ? 'positive' : c.perubahan < 0 ? 'negative' : '';
+            const changeSign = c.perubahan > 0 ? '+' : '';
+            return `<tr>
+                <td>${i + 1}</td>
+                <td>${c.nama_investor || '-'}</td>
+                <td class="${changeClass}" style="text-align:right;font-weight:700">
+                    ${changeSign}${Number(c.perubahan).toLocaleString('id-ID')}
+                </td>
+                <td style="text-align:right">${c.pct_1 != null ? c.pct_1.toFixed(2) + '%' : '-'}</td>
+                <td style="text-align:right">${c.pct_2 != null ? c.pct_2.toFixed(2) + '%' : '-'}</td>
+            </tr>`;
+        }).join('');
+
+        el.innerHTML = `
+            <div class="table-card__header">📈 Perubahan Kepemilikan (${ changes.length } entries)</div>
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr>
+                        <th>#</th><th>Nama Investor</th><th style="text-align:right">Perubahan (Saham)</th>
+                        <th style="text-align:right">% (T-1)</th><th style="text-align:right">% (T)</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    // ─── Render: Investor ─────────────────────────────────────
+    function renderInvestorResults(d) {
+        const el = document.getElementById('investorTable');
+        const results = d.results || [];
+
+        if (results.length === 0) {
+            el.innerHTML = `<div class="table-card__header">🔍 Hasil: "${d.query}"</div><div class="table-card__empty">Tidak ditemukan investor dengan nama tersebut.</div>`;
+        } else {
+            const rows = results.map((r, i) => `
+                <tr style="cursor:pointer" onclick="quickTicker('${r.share_code}');switchTab('ticker');">
+                    <td>${i + 1}</td>
+                    <td><strong>${r.share_code}</strong></td>
+                    <td>${r.issuer_name}</td>
+                    <td>${r.investor_name}</td>
+                    <td>${r.investor_type || '-'}</td>
+                    <td style="text-align:right">${r.total_shares != null ? Number(r.total_shares).toLocaleString('id-ID') : '-'}</td>
+                    <td style="text-align:right;font-weight:700;color:var(--accent-cyan)">${r.percentage != null ? r.percentage.toFixed(2) + '%' : '-'}</td>
+                </tr>
+            `).join('');
+
+            el.innerHTML = `
+                <div class="table-card__header">🔍 "${d.query}" — ${d.total} hasil ditemukan</div>
+                <div style="overflow-x:auto">
+                    <table class="data-table">
+                        <thead><tr>
+                            <th>#</th><th>Kode</th><th>Emiten</th><th>Nama Investor</th><th>Tipe</th>
+                            <th style="text-align:right">Saham</th><th style="text-align:right">%</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        document.getElementById('investorResults').classList.add('active');
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────
+    function showLoading(show) { document.getElementById('loading').classList.toggle('active', show); }
+    function showError(msg) { const el = document.getElementById('errorBox'); el.textContent = msg; el.classList.add('active'); }
+    function hideError() { document.getElementById('errorBox').classList.remove('active'); }
+    function hideAll() {
+        document.getElementById('results').classList.remove('active');
+        document.getElementById('investorResults').classList.remove('active');
+    }
+</script>
+</body>
+</html>
