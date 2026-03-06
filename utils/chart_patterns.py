@@ -13,10 +13,36 @@ import logging
 import numpy as np
 import pandas as pd
 
-try:
-    from scipy.signal import find_peaks
-except ImportError:
-    find_peaks = None
+def find_peaks(x, distance=1, prominence=None):
+    """Custom peak detection to replace scipy and save 140MB bundle size."""
+    if len(x) < 3:
+        return np.array([]), {}
+        
+    peaks = []
+    for i in range(1, len(x) - 1):
+        if x[i] > x[i - 1] and x[i] > x[i + 1]:
+            peaks.append(i)
+            
+    if distance > 1 and peaks:
+        # Keep highest peaks when they are too close
+        peaks.sort(key=lambda idx: x[idx], reverse=True)
+        filtered = []
+        for p in peaks:
+            if not any(abs(p - fp) < distance for fp in filtered):
+                filtered.append(p)
+        peaks = sorted(filtered)
+        
+    if prominence is not None and peaks:
+        filtered = []
+        for p in peaks:
+            # Check local minima surrounding the peak
+            left_min = np.min(x[max(0, p - 20):p]) if p > 0 else x[p]
+            right_min = np.min(x[p + 1:min(len(x), p + 20)]) if p < len(x) - 1 else x[p]
+            if x[p] - min(left_min, right_min) >= prominence:
+                filtered.append(p)
+        peaks = filtered
+        
+    return np.array(peaks), {}
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +62,6 @@ def _find_local_extrema(closes: np.ndarray, distance: int = 10,
     Returns:
         (peak_indices, trough_indices) as numpy arrays
     """
-    if find_peaks is None:
-        logger.warning("scipy not installed — chart pattern detection disabled")
-        return np.array([]), np.array([])
-
     if len(closes) < distance * 2:
         return np.array([]), np.array([])
 
