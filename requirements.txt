@@ -18,3 +18,7 @@ finnhub-python>=2.4
 google-genai>=1.0
 anthropic>=0.40
 groq>=0.11.0
+
+# Scraper requirements
+selenium>=4.10.0
+webdriver-manager>=4.0.0

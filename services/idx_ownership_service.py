@@ -33,19 +33,38 @@ def _find_latest_csv(pattern):
 
 
 def _parse_id_number(val):
-    """Parse Indonesian-formatted number (e.g., '3.200.142.830' or '41,10') to float."""
+    """Parse Indonesian-formatted number (e.g., '3.200.142.830' or '41,10') 
+    or US-formatted number ('25,786,900') to float."""
     if pd.isna(val) or val is None or val == '' or val == 'None' or val == 'nan':
         return None
     s = str(val).strip()
     if not s or s.lower() == 'nan':
         return None
-    # Remove thousand separators (dots) if the number uses Indonesian format
-    # Check if it uses comma as decimal separator
+        
+    s = s.replace(' ', '')
+    
+    # Check if number contains both commas and dots
     if ',' in s and '.' in s:
-        # Indonesian format: 3.200.142.830 or "41,10"
-        s = s.replace('.', '').replace(',', '.')
+        last_comma = s.rfind(',')
+        last_dot = s.rfind('.')
+        if last_comma > last_dot:
+            # Format: 1.234,56 (Indonesian)
+            s = s.replace('.', '').replace(',', '.')
+        else:
+            # Format: 1,234.56 (US)
+            s = s.replace(',', '')
     elif ',' in s:
-        s = s.replace(',', '.')
+        if s.count(',') > 1:
+            # Format: 1,234,567 (US thousands)
+            s = s.replace(',', '')
+        else:
+            parts = s.split(',')
+            # If the part after the comma does not have exactly 3 digits, it's a decimal (e.g., '41,10')
+            if len(parts[1]) != 3:
+                s = s.replace(',', '.')
+            else:
+                s = s.replace(',', '')
+    
     try:
         return float(s)
     except (ValueError, TypeError):
@@ -233,12 +252,28 @@ def get_ownership_changes(ticker=None, min_change=0):
     if summary.empty:
         return []
 
-    # Find percentage columns dynamically
+    # Find percentage columns and total share columns dynamically
     pct_cols = [c for c in summary.columns if 'Persentase' in c]
+    saham_cols = [c for c in summary.columns if 'Saham Gabungan Per Investor' in c]
 
     results = []
     for _, row in summary.iterrows():
         change_val = _parse_id_number(row.get('Perubahan', 0)) or 0
+
+        # Recalculate from Saham Gabungan if Perubahan is reported as 0 but there's an actual change
+        if change_val == 0 and len(saham_cols) >= 2:
+            try:
+                t1_shares = _parse_id_number(row.get(saham_cols[0])) or 0
+                # Use the last column in case there are >2
+                t2_shares = _parse_id_number(row.get(saham_cols[-1])) or 0
+                calc_change = t2_shares - t1_shares
+                if calc_change != 0:
+                    change_val = calc_change
+            except Exception:
+                pass
+
+        if change_val == 0:
+            continue
 
         if min_change > 0 and abs(change_val) < min_change:
             continue
