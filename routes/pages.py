@@ -83,5 +83,11 @@ def pattern_recognition_page():
 
 @pages_bp.route('/idx-ownership')
 def idx_ownership_page():
-    """Serve the IDX Shareholder (KSEI) page."""
+    """Serve the IDX Shareholder page."""
     return render_template('idx_ownership.html', active_page='idx-ownership')
+
+
+@pages_bp.route('/idx-tracker')
+def idx_tracker_page():
+    """Serve the IDX Ownership Change Tracker page."""
+    return render_template('idx_tracker.html', active_page='idx-tracker')

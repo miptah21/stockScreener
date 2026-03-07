@@ -165,6 +165,6 @@ def _merge_header_rows(row1, row2):
 if __name__ == "__main__":
     # PDF dari IDX Keterbukaan Informasi:
     # "Kepemilikan Efek Diatas 5% Berdasarkan SID (Publik) [Semua Emiten Saham]"
-    pdf_file = r"C:\Users\mifta\Desktop\Project\finance\data\20260306_Semua Emiten Saham_Pengumuman Bursa_32041440_lamp1.pdf"
-    csv_out = r"C:\Users\mifta\Desktop\Project\finance\data\20260306_Kepemilikan_Efek_5persen_SID.csv"
+    pdf_file = r"C:\Users\mifta\Desktop\Project\finance\data\5persen\20260306_Semua Emiten Saham_Pengumuman Bursa_32041440_lamp1.pdf"
+    csv_out = r"C:\Users\mifta\Desktop\Project\finance\data\5persen\20260306_Kepemilikan_Efek_5persen_SID.csv"
     parse_kepemilikan_5persen(pdf_file, csv_out)

@@ -57,6 +57,6 @@ def parse_pdf_to_csv(pdf_path, output_path):
 
 if __name__ == "__main__":
     # PDF dari IDX Keterbukaan Informasi: "Pemegang Saham di atas 1% (KSEI) [Semua Emiten Saham]"
-    pdf_file = r"C:\Users\mifta\Desktop\Project\finance\data\20260303_Pemegang_Saham_1persen_KSEI.pdf"
-    csv_out = r"C:\Users\mifta\Desktop\Project\finance\data\20260303_Pemegang_Saham_1persen_KSEI.csv"
+    pdf_file = r"C:\Users\mifta\Desktop\Project\finance\data\1persen\20260303_Pemegang_Saham_1persen_KSEI.pdf"
+    csv_out = r"C:\Users\mifta\Desktop\Project\finance\data\1persen\20260303_Pemegang_Saham_1persen_KSEI.csv"
     parse_pdf_to_csv(pdf_file, csv_out)

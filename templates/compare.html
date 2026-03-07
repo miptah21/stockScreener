@@ -5,7 +5,8 @@
 
 {% block head_styles %}
 <script src="https://d3js.org/d3.v7.min.js"></script>
-<style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=4">
+    <style>
     /* ─── Compare Page Wrapper ─────────────────────────────────────── */
     .compare-page {
         width: 100%;

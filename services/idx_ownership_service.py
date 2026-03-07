@@ -13,7 +13,10 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# Base data directory and specific sub-directories
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+DIR_1PERSEN = os.path.join(DATA_DIR, "1persen")
+DIR_5PERSEN = os.path.join(DATA_DIR, "5persen")
 
 # ─── In-memory cache ─────────────────────────────────────────────────
 _cache_1persen = None
@@ -22,14 +25,44 @@ _cache_1persen_path = None
 _cache_5persen_path = None
 
 
-def _find_latest_csv(pattern):
-    """Find the latest CSV file matching the given glob pattern in DATA_DIR."""
-    files = glob.glob(os.path.join(DATA_DIR, pattern))
+def _find_latest_csv(pattern, directory):
+    """Find the latest CSV file matching the given glob pattern in the specified directory."""
+    files = glob.glob(os.path.join(directory, pattern))
     if not files:
         return None
     # Sort by filename (date prefix YYYYMMDD ensures correct order)
     files.sort(reverse=True)
     return files[0]
+
+
+def get_available_dates(dataset_type='5%'):
+    """
+    Get a list of available dates from the dataset filenames.
+    Returns structurally sorted YYYY-MM-DD format strings.
+    """
+    if dataset_type == '5%':
+        pattern = "*Kepemilikan_Efek_5persen_SID.csv"
+        directory = DIR_5PERSEN
+    else:
+        pattern = "*Pemegang_Saham_1persen_KSEI.csv"
+        directory = DIR_1PERSEN
+        
+    files = glob.glob(os.path.join(directory, pattern))
+    dates = []
+    for f in files:
+        basename = os.path.basename(f)
+        try:
+            # Assumes filename starts with YYYYMMDD
+            date_str = basename.split('_')[0]
+            if len(date_str) == 8 and date_str.isdigit():
+                formatted_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+                if formatted_date not in dates:
+                    dates.append(formatted_date)
+        except Exception:
+            continue
+            
+    dates.sort(reverse=True)
+    return dates
 
 
 def _parse_id_number(val):
@@ -78,9 +111,9 @@ def load_1persen_data(force_reload=False):
     """
     global _cache_1persen, _cache_1persen_path
 
-    csv_path = _find_latest_csv("*Pemegang_Saham_1persen_KSEI.csv")
+    csv_path = _find_latest_csv("*Pemegang_Saham_1persen_KSEI.csv", DIR_1PERSEN)
     if csv_path is None:
-        logger.warning("No 1%% KSEI CSV file found in %s", DATA_DIR)
+        logger.warning("No 1%% KSEI CSV file found in %s", DIR_1PERSEN)
         return None
 
     if not force_reload and _cache_1persen is not None and _cache_1persen_path == csv_path:
@@ -106,17 +139,27 @@ def load_1persen_data(force_reload=False):
     return df
 
 
-def load_5persen_data(force_reload=False):
+def load_5persen_data(date=None, force_reload=False):
     """
-    Load the latest Kepemilikan Efek ≥5% SID CSV into a DataFrame.
+    Load the Kepemilikan Efek ≥5% SID CSV matching the date (or latest) into a DataFrame.
     Results are cached in memory.
+    Args:
+        date: YYYY-MM-DD string. If None, uses the latest available data.
     """
     global _cache_5persen, _cache_5persen_path
 
-    csv_path = _find_latest_csv("*Kepemilikan_Efek_5persen_SID.csv")
-    if csv_path is None:
-        logger.warning("No 5%% SID CSV file found in %s", DATA_DIR)
-        return None
+    if date:
+        date_prefix = date.replace("-", "")
+        pattern = f"{date_prefix}_Kepemilikan_Efek_5persen_SID.csv"
+        csv_path = os.path.join(DIR_5PERSEN, pattern)
+        if not os.path.exists(csv_path):
+            logger.warning("No 5%% SID CSV file found for date %s in %s", date, DIR_5PERSEN)
+            return None
+    else:
+        csv_path = _find_latest_csv("*Kepemilikan_Efek_5persen_SID.csv", DIR_5PERSEN)
+        if csv_path is None:
+            logger.warning("No 5%% SID CSV file found in %s", DIR_5PERSEN)
+            return None
 
     if not force_reload and _cache_5persen is not None and _cache_5persen_path == csv_path:
         return _cache_5persen
@@ -227,18 +270,19 @@ def get_shareholders(ticker):
     }
 
 
-def get_ownership_changes(ticker=None, min_change=0):
+def get_ownership_changes(ticker=None, min_change=0, date=None):
     """
     Return ownership changes from the 5% SID dataset.
 
     Args:
         ticker: Optional ticker filter
         min_change: Minimum absolute change to include (default 0 = all non-zero)
+        date: Optional YYYY-MM-DD string to get data for a specific date
 
     Returns:
         List of dicts with change data.
     """
-    df = load_5persen_data()
+    df = load_5persen_data(date=date)
     if df is None:
         return []
 

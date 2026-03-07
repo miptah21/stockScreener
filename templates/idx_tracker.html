@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ownership Tracker — Finance Screener</title>
+    <meta name="description" content="Lacak pergerakan dan perubahan kepemilikan saham harian dari investor institusi dan individu di atas 5%.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=4">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.06);
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f0f0f0;
+            --text-secondary: #8b8b9e;
+            --text-muted: #5a5a6e;
+            --accent-blue: #6366f1;
+            --accent-purple: #a855f7;
+            --accent-cyan: #22d3ee;
+            --accent-emerald: #10b981;
+            --accent-rose: #f43f5e;
+            --gradient-primary: linear-gradient(135deg, #6366f1, #a855f7);
+            --gradient-hero: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+            --shadow-up: 0 0 40px rgba(16, 185, 129, 0.15);
+            --shadow-down: 0 0 40px rgba(244, 63, 94, 0.15);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(168, 85, 247, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.04) 0%, transparent 50%);
+            z-index: 0;
+            animation: bgPulse 15s ease-in-out infinite alternate;
+        }
+        @keyframes bgPulse {
+            0% { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.05) rotate(2deg); }
+        }
+        .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+
+        /* Header */
+        .header { padding: 20px 0 30px; text-align: center; }
+        .header__badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 100px; font-size: 12px; font-weight: 500; color: var(--accent-purple); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 20px; animation: fadeInDown 0.6s ease; }
+        .header__badge::before { content: ''; width: 6px; height: 6px; background: var(--accent-cyan); border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .header h1 { font-size: 42px; font-weight: 800; background: var(--gradient-hero); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 12px; animation: fadeInDown 0.6s ease 0.1s both; }
+        .header p { color: var(--text-secondary); font-size: 16px; max-width: 650px; margin: 0 auto; line-height: 1.6; animation: fadeInDown 0.6s ease 0.2s both; }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
+        .animate-in { opacity: 0; transform: translateY(20px); animation: slideUp 0.5s ease forwards; }
+
+        /* Loading & Error */
+        .loading { display: none; text-align: center; padding: 60px 0; }
+        .loading.active { display: block; }
+        .spinner { width: 48px; height: 48px; border: 3px solid var(--glass-border); border-top-color: var(--accent-purple); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading p { color: var(--text-secondary); font-size: 14px; }
+        .error-box { display: none; max-width: 600px; margin: 24px auto; padding: 20px 24px; background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.2); border-radius: var(--radius-sm); color: var(--accent-rose); font-size: 14px; text-align: center; }
+        .error-box.active { display: block; animation: fadeIn 0.4s ease; }
+
+        /* Main Content */
+        .dashboard { display: none; padding-bottom: 80px; }
+        .dashboard.active { display: block; animation: fadeIn 0.5s ease; }
+
+        /* Top Movers section */
+        .section-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .section-title::before { content: ''; width: 4px; height: 24px; background: var(--gradient-primary); border-radius: 2px; }
+        
+        .movers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
+        .mover-panel { background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 24px; backdrop-filter: blur(20px); position: relative; overflow: hidden; }
+        
+        .mover-panel--buy::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, rgba(16,185,129,0.5), var(--accent-emerald)); }
+        .mover-panel--sell::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, rgba(244,63,94,0.5), var(--accent-rose)); }
+        
+        .mover-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+        .mover-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .mover-icon.buy { background: rgba(16,185,129,0.15); color: var(--accent-emerald); }
+        .mover-icon.sell { background: rgba(244,63,94,0.15); color: var(--accent-rose); }
+        .mover-title { font-size: 16px; font-weight: 600; }
+
+        .mover-list { display: flex; flex-direction: column; gap: 12px; }
+        .mover-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid transparent; border-radius: 12px; transition: var(--transition); cursor: default; }
+        .mover-item:hover { background: rgba(255,255,255,0.04); border-color: var(--glass-border); }
+        
+        .mover-item.buy:hover { box-shadow: 0 4px 20px rgba(16,185,129,0.1); }
+        .mover-item.sell:hover { box-shadow: 0 4px 20px rgba(244,63,94,0.1); }
+        
+        .mover-stock { display: flex; align-items: center; gap: 12px; max-width: 60%; }
+        .mover-ticker { padding: 4px 10px; background: var(--glass); border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--text-primary); }
+        .mover-investor { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mover-value { text-align: right; }
+        .mover-shares { font-size: 16px; font-weight: 700; }
+        .mover-shares.buy { color: var(--accent-emerald); }
+        .mover-shares.sell { color: var(--accent-rose); }
+
+        /* Data Tables */
+        .table-card { background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius); overflow: hidden; backdrop-filter: blur(20px); margin-bottom: 32px; }
+        .table-card__header { padding: 20px 24px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+        
+        .toolbar { display: flex; gap: 12px; align-items: center; }
+        .table-filter { padding: 8px 16px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 13px; outline: none; width: 250px; }
+        .table-filter:focus { border-color: var(--accent-purple); }
+        
+        .filter-btn { padding: 8px 16px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: var(--transition); }
+        .filter-btn.active { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: var(--accent-blue); font-weight: 600; }
+        .filter-btn:hover:not(.active) { background: var(--bg-card-hover); color: var(--text-primary); }
+
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table thead th { padding: 14px 20px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--glass-border); background: rgba(255,255,255,0.02); cursor: pointer; user-select: none; transition: var(--transition); }
+        .data-table thead th:hover { color: var(--accent-purple); }
+        .data-table thead th.sorted-asc::after { content: ' ▲'; font-size: 9px; color: var(--accent-purple); }
+        .data-table thead th.sorted-desc::after { content: ' ▼'; font-size: 9px; color: var(--accent-purple); }
+        .data-table tbody td { padding: 16px 20px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text-secondary); }
+        .data-table tbody tr { transition: var(--transition); }
+        .data-table tbody tr:hover { background: var(--bg-card-hover); }
+        
+        .td-ticker { font-weight: 700; color: var(--text-primary); }
+        .td-investor { max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .positive { color: var(--accent-emerald) !important; font-weight: 600; }
+        .negative { color: var(--accent-rose) !important; font-weight: 600; }
+        .neutral { color: var(--text-muted); }
+
+        .table-empty { padding: 60px 20px; text-align: center; color: var(--text-muted); font-size: 14px; }
+
+        /* Pagination */
+        .pagination { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-top: 1px solid var(--glass-border); background: rgba(255,255,255,0.01); }
+        .page-info { font-size: 13px; color: var(--text-muted); }
+        .page-controls { display: flex; gap: 8px; }
+        .page-btn { padding: 6px 12px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: var(--transition); }
+        .page-btn:hover:not(:disabled) { background: var(--bg-card-hover); color: var(--text-primary); }
+        .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Footer */
+        .footer { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 12px; border-top: 1px solid var(--glass-border); }
+        .footer a { color: var(--accent-blue); text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 900px) { .movers-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { 
+            .header h1 { font-size: 32px; } 
+            .table-card__header { flex-direction: column; align-items: flex-start; }
+            .toolbar { width: 100%; justify-content: space-between; }
+            .table-filter { flex: 1; min-width: 0; }
+            .data-table { font-size: 12px; } 
+            .data-table thead th, .data-table tbody td { padding: 12px 14px; } 
+            .td-investor { max-width: 150px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Nav -->
+    {% include 'components/navbar.html' %}
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header__badge"><span>IDX Market Tracker · 5% Data</span></div>
+        <h1>Ownership Change Tracker</h1>
+        <p>Pantau pergerakan masuk (akumulasi) dan keluar (distribusi) dari pemegang saham institusi besar dan individu secara harian berdasarkan data KSEI/SID.</p>
+    </header>
+
+    <!-- Loading -->
+    <div id="loading" class="loading active"><div class="spinner"></div><p>Memuat data pergerakan pasar...</p></div>
+
+    <!-- Error -->
+    <div id="errorBox" class="error-box"></div>
+
+    <!-- Main Content -->
+    <div id="dashboard" class="dashboard">
+        <!-- Top Movers -->
+        <div class="section-title animate-in">🔥 Top Movers</div>
+        <div class="movers-grid animate-in" style="animation-delay: 0.1s">
+            <!-- Top Buys -->
+            <div class="mover-panel mover-panel--buy">
+                <div class="mover-header">
+                    <div class="mover-icon buy">🟢</div>
+                    <div class="mover-title">Top Accumulations (Net Buy)</div>
+                </div>
+                <div class="mover-list" id="topBuysList">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+            
+            <!-- Top Sells -->
+            <div class="mover-panel mover-panel--sell">
+                <div class="mover-header">
+                    <div class="mover-icon sell">🔴</div>
+                    <div class="mover-title">Top Distributions (Net Sell)</div>
+                </div>
+                <div class="mover-list" id="topSellsList">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Flow Table -->
+        <div class="section-title animate-in" style="animation-delay: 0.2s">📈 Seluruh Perubahan Kepemilikan</div>
+        <div class="table-card animate-in" style="animation-delay: 0.3s">
+            <div class="table-card__header">
+                <span id="tableTitle">Data Pergerakan (0 entri)</span>
+                <div class="toolbar">
+                    <select id="dateSelect" class="table-filter" style="width:140px; cursor:pointer;" onchange="handleDateChange()">
+                        <option value="">Memuat periode...</option>
+                    </select>
+                    <button class="filter-btn active" id="btnFilterAll" onclick="setFilterMode('ALL')">Semua</button>
+                    <button class="filter-btn" id="btnFilterBuy" onclick="setFilterMode('BUY')">🟢 Buy</button>
+                    <button class="filter-btn" id="btnFilterSell" onclick="setFilterMode('SELL')">🔴 Sell</button>
+                    <input type="text" id="searchInput" class="table-filter" placeholder="Cari Kode Saham / Nama Investor..." autocomplete="off">
+                </div>
+            </div>
+            <div style="overflow-x:auto">
+                <table class="data-table">
+                    <thead><tr>
+                        <th onclick="sortTbl(0)">Kode Saham</th>
+                        <th onclick="sortTbl(1)">Emiten</th>
+                        <th onclick="sortTbl(2)">Nama Pemegang Saham</th>
+                        <th onclick="sortTbl(3)" style="text-align:right">Perubahan Saham</th>
+                        <th onclick="sortTbl(4)" style="text-align:right">% T-1</th>
+                        <th onclick="sortTbl(5)" style="text-align:right">% T</th>
+                    </tr></thead>
+                    <tbody id="tableBody">
+                        <!-- Populated via JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <div class="page-info" id="pageInfo">Menampilkan 0-0 dari 0</div>
+                <div class="page-controls">
+                    <button class="page-btn" id="btnPrevPage" onclick="changePage(-1)" disabled>Sebelumnya</button>
+                    <button class="page-btn" id="btnNextPage" onclick="changePage(1)" disabled>Selanjutnya</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Data perubahan dihitung dari laporan "Kepemilikan Efek di atas 5%" SID KSEI.</p>
+        <p style="margin-top: 6px;">Built with Flask · © 2026 Finance Screener</p>
+    </footer>
+</div>
+
+<script>
+    let allData = [];
+    let filteredData = [];
+    let filterMode = 'ALL'; // 'ALL', 'BUY', 'SELL'
+    
+    // Sort & Pagination state
+    let sortCol = 3; // Default sort by Perubahan
+    let sortAsc = false; // Default desc (biggest buys first)
+    
+    let currentPage = 1;
+    const pageSize = 50;
+
+    // Load Data
+    document.addEventListener('DOMContentLoaded', initData);
+
+    let availableDates = [];
+
+    async function initData() {
+        try {
+            const res = await fetch('/api/idx-ownership/dates');
+            const data = await res.json();
+            
+            if (data.success && data.dates && data.dates.length > 0) {
+                availableDates = data.dates;
+                const select = document.getElementById('dateSelect');
+                select.innerHTML = availableDates.map(d => `<option value="${d}">${d}</option>`).join('');
+                
+                // Load latest date initially
+                await loadData(availableDates[0]);
+            } else {
+                await loadData(); // Fallback
+            }
+        } catch (err) {
+            console.error(err);
+            await loadData(); // Fallback
+        }
+    }
+
+    async function handleDateChange() {
+        const date = document.getElementById('dateSelect').value;
+        if (date) {
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('dashboard').classList.remove('active');
+            document.getElementById('errorBox').classList.remove('active');
+            await loadData(date);
+        }
+    }
+
+    async function loadData(dateStr) {
+        try {
+            const url = dateStr ? `/api/idx-ownership/changes?date=${dateStr}` : '/api/idx-ownership/changes';
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            if (!data.success) {
+                showError(data.error || 'Gagal memuat data dari server.');
+                return;
+            }
+            
+            if (!data.changes || data.changes.length === 0) {
+                showError('Tidak ada data perubahan kepemilikan yang ditemukan.');
+                return;
+            }
+
+            allData = data.changes;
+            applyFiltersAndSort();
+            
+            renderTopMovers();
+            
+            document.getElementById('loading').classList.remove('active');
+            document.getElementById('dashboard').classList.add('active');
+        } catch (err) {
+            console.error(err);
+            showError('Gagal terhubung ke server.');
+        }
+    }
+
+    // Top Movers
+    function renderTopMovers() {
+        // Find top 5 buys (largest positive perubahan)
+        const buys = [...allData].filter(c => c.perubahan > 0).sort((a, b) => b.perubahan - a.perubahan).slice(0, 5);
+        // Find top 5 sells (largest negative perubahan)
+        const sells = [...allData].filter(c => c.perubahan < 0).sort((a, b) => a.perubahan - b.perubahan).slice(0, 5);
+
+        const buysHtml = buys.length ? buys.map(renderMoverItem).join('') : '<div style="padding: 12px;color:var(--text-muted)">Tidak ada saham yang diakumulasi.</div>';
+        const sellsHtml = sells.length ? sells.map(renderMoverItem).join('') : '<div style="padding: 12px;color:var(--text-muted)">Tidak ada saham yang didistribusi.</div>';
+
+        document.getElementById('topBuysList').innerHTML = buysHtml;
+        document.getElementById('topSellsList').innerHTML = sellsHtml;
+    }
+
+    function renderMoverItem(c) {
+        const isBuy = c.perubahan > 0;
+        const typeClass = isBuy ? 'buy' : 'sell';
+        const sign = isBuy ? '+' : '';
+        
+        return `
+            <div class="mover-item ${typeClass}" onclick="openSearch('${c.kode_efek}')">
+                <div class="mover-stock">
+                    <span class="mover-ticker">${c.kode_efek}</span>
+                    <span class="mover-investor" title="${c.nama_investor}">${c.nama_investor}</span>
+                </div>
+                <div class="mover-value">
+                    <div class="mover-shares ${typeClass}">${sign}${Number(c.perubahan).toLocaleString('id-ID')} lembar</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function openSearch(ticker) {
+        document.getElementById('searchInput').value = ticker;
+        handleSearch();
+    }
+
+    // Table Filters & Sort
+    document.getElementById('searchInput').addEventListener('input', handleSearch);
+
+    function handleSearch() {
+        currentPage = 1;
+        applyFiltersAndSort();
+    }
+
+    function setFilterMode(mode) {
+        filterMode = mode;
+        document.getElementById('btnFilterAll').classList.toggle('active', mode === 'ALL');
+        document.getElementById('btnFilterBuy').classList.toggle('active', mode === 'BUY');
+        document.getElementById('btnFilterSell').classList.toggle('active', mode === 'SELL');
+        currentPage = 1;
+        applyFiltersAndSort();
+    }
+
+    function applyFiltersAndSort() {
+        const query = document.getElementById('searchInput').value.trim().toLowerCase();
+        
+        filteredData = allData.filter(c => {
+            // Mode filter
+            if (filterMode === 'BUY' && c.perubahan <= 0) return false;
+            if (filterMode === 'SELL' && c.perubahan >= 0) return false;
+            
+            // Text filter
+            if (query) {
+                const searchStr = `${c.kode_efek} ${c.nama_emiten} ${c.nama_investor}`.toLowerCase();
+                if (!searchStr.includes(query)) return false;
+            }
+            
+            return true;
+        });
+        
+        // Sorting
+        const keys = ['kode_efek', 'nama_emiten', 'nama_investor', 'perubahan', 'pct_1', 'pct_2'];
+        const key = keys[sortCol];
+        
+        filteredData.sort((a, b) => {
+            let va = a[key]; let vb = b[key];
+            if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+            va = va || 0; vb = vb || 0;
+            return sortAsc ? va - vb : vb - va;
+        });
+
+        updateTable();
+    }
+
+    function sortTbl(colIdx) {
+        if (sortCol === colIdx) {
+            sortAsc = !sortAsc;
+        } else {
+            sortCol = colIdx;
+            sortAsc = true;
+        }
+        
+        // Update headers visually
+        document.querySelectorAll('.data-table th').forEach((th, i) => {
+            th.classList.remove('sorted-asc', 'sorted-desc');
+            if (i === colIdx) th.classList.add(sortAsc ? 'sorted-asc' : 'sorted-desc');
+        });
+        
+        currentPage = 1;
+        applyFiltersAndSort();
+    }
+
+    // Table Render & Pagination
+    function updateTable() {
+        const tbody = document.getElementById('tableBody');
+        const count = filteredData.length;
+        
+        document.getElementById('tableTitle').textContent = `Data Pergerakan (${count} entri)`;
+        
+        if (count === 0) {
+            tbody.innerHTML = `<tr><td colspan="6"><div class="table-empty">Tidak ada data yang sesuai dengan filter Anda.</div></td></tr>`;
+            document.getElementById('pageInfo').textContent = 'Tidak ada hasil';
+            document.getElementById('btnPrevPage').disabled = true;
+            document.getElementById('btnNextPage').disabled = true;
+            return;
+        }
+
+        const maxPage = Math.ceil(count / pageSize);
+        if (currentPage > maxPage) currentPage = maxPage;
+        
+        const start = (currentPage - 1) * pageSize;
+        const end = Math.min(start + pageSize, count);
+        const pageData = filteredData.slice(start, end);
+        
+        tbody.innerHTML = pageData.map(c => {
+            const isBuy = c.perubahan > 0;
+            const isSell = c.perubahan < 0;
+            const changeClass = isBuy ? 'positive' : isSell ? 'negative' : 'neutral';
+            const changeSign = isBuy ? '+' : '';
+            
+            return `
+                <tr>
+                    <td class="td-ticker">${c.kode_efek || '-'}</td>
+                    <td>${c.nama_emiten || '-'}</td>
+                    <td class="td-investor" title="${c.nama_investor}">${c.nama_investor || '-'}</td>
+                    <td class="${changeClass}" style="text-align:right">
+                        ${changeSign}${Number(c.perubahan).toLocaleString('id-ID')}
+                    </td>
+                    <td style="text-align:right">${c.pct_1 != null ? c.pct_1.toFixed(2) + '%' : '-'}</td>
+                    <td style="text-align:right">${c.pct_2 != null ? c.pct_2.toFixed(2) + '%' : '-'}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Pagination Controls
+        document.getElementById('pageInfo').textContent = `Menampilkan ${start + 1}-${end} dari ${count}`;
+        document.getElementById('btnPrevPage').disabled = currentPage === 1;
+        document.getElementById('btnNextPage').disabled = currentPage === maxPage;
+    }
+
+    function changePage(delta) {
+        currentPage += delta;
+        updateTable();
+    }
+
+    function showError(msg) {
+        document.getElementById('loading').classList.remove('active');
+        const el = document.getElementById('errorBox');
+        el.textContent = msg;
+        el.classList.add('active');
+    }
+</script>
+</body>
+</html>

@@ -13,43 +13,7 @@
 
 <div class="container">
     <!-- Nav -->
-    <nav class="nav">
-        <a href="/" class="nav__brand">📊 Finance Scraper</a>
-        <div class="nav__links">
-            <a href="/" class="nav__link {% if active_page == 'dashboard' %}nav__link--active{% else %}nav__link--default{% endif %}">Dashboard</a>
-            
-            <!-- Screener Dropdown -->
-            <div class="nav__dropdown">
-                <div class="nav__link {% if active_page in ['screening', 'technical', 'simple'] %}nav__link--active{% else %}nav__link--default{% endif %} nav__dropdown-toggle">
-                    🔍 Screeners <span class="nav__dropdown-arrow">▼</span>
-                </div>
-                <div class="nav__dropdown-menu">
-                    <a href="/screening" class="nav__dropdown-item {% if active_page == 'screening' %}nav__dropdown-item--active{% endif %}">Fundamental Scrn</a>
-                    <a href="/technical-screening" class="nav__dropdown-item {% if active_page == 'technical' %}nav__dropdown-item--active{% endif %}">Technical Scrn</a>
-                    <a href="/simple-screening" class="nav__dropdown-item {% if active_page == 'simple' %}nav__dropdown-item--active{% endif %}">RSI & MACD</a>
-                    <a href="/pattern-recognition" class="nav__dropdown-item {% if active_page == 'patterns' %}nav__dropdown-item--active{% endif %}">🔮 Patterns</a>
-                </div>
-            </div>
-
-            <!-- Data Dropdown -->
-            <div class="nav__dropdown">
-                <div class="nav__link {% if active_page in ['avg-price', 'ownership', 'idx-ownership', 'market', 'compare'] %}nav__link--active{% else %}nav__link--default{% endif %} nav__dropdown-toggle">
-                    📊 Data <span class="nav__dropdown-arrow">▼</span>
-                </div>
-                <div class="nav__dropdown-menu">
-                    <a href="/avg-price" class="nav__dropdown-item {% if active_page == 'avg-price' %}nav__dropdown-item--active{% endif %}">Rata-Rata Harga</a>
-                    <a href="/ownership" class="nav__dropdown-item {% if active_page == 'ownership' %}nav__dropdown-item--active{% endif %}">Ownership</a>
-                    <a href="/idx-ownership" class="nav__dropdown-item {% if active_page == 'idx-ownership' %}nav__dropdown-item--active{% endif %}">🏛️ IDX Shareholders</a>
-                    <a href="/market-overview" class="nav__dropdown-item {% if active_page == 'market' %}nav__dropdown-item--active{% endif %}">Market Overview</a>
-                    <a href="/compare" class="nav__dropdown-item {% if active_page == 'compare' %}nav__dropdown-item--active{% endif %}">📊 Compare</a>
-                </div>
-            </div>
-
-            <a href="/backtest" class="nav__link {% if active_page == 'backtest' %}nav__link--active{% else %}nav__link--default{% endif %}">🔬 Backtest</a>
-            <a href="/watchlist" class="nav__link {% if active_page == 'watchlist' %}nav__link--active{% else %}nav__link--default{% endif %}">⭐ Watchlist</a>
-            <a href="/sentiment" class="nav__link {% if active_page == 'sentiment' %}nav__link--active{% else %}nav__link--default{% endif %}">🧠 Sentimen</a>
-        </div>
-    </nav>
+    {% include 'components/navbar.html' %}
 
     {% block content %}{% endblock %}
 

@@ -4,7 +4,8 @@
 {% block description %}Analyze stock sentiment using AI from 6 news sources with LLM-powered analysis.{% endblock %}
 
 {% block head_styles %}
-<style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=4">
+    <style>
     /* ── Sentiment Page Styles ── */
     .sa-header { text-align: center; margin-bottom: 28px; }
     .sa-header__badge {

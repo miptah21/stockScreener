@@ -799,6 +799,7 @@ def api_idx_ownership_changes():
 
     Query params:
         ticker (str, optional): Filter by stock code
+        date (str, optional): Filter by specific report date (YYYY-MM-DD)
     """
     from services.idx_ownership_service import get_ownership_changes
 
@@ -808,8 +809,10 @@ def api_idx_ownership_changes():
         if not ticker:
             return jsonify({'success': False, 'error': 'Invalid ticker format.'}), 400
 
+    date = request.args.get('date', '').strip() or None
+
     try:
-        changes = get_ownership_changes(ticker=ticker, min_change=0)
+        changes = get_ownership_changes(ticker=ticker, min_change=0, date=date)
         return jsonify({
             'success': True,
             'total': len(changes),
@@ -817,6 +820,23 @@ def api_idx_ownership_changes():
         })
     except Exception as e:
         logger.exception("IDX ownership changes error")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api_data_bp.route('/api/idx-ownership/dates', methods=['GET'])
+def api_idx_ownership_dates():
+    """
+    Return available report dates from the 5% SID dataset.
+    """
+    from services.idx_ownership_service import get_available_dates
+    try:
+        dates = get_available_dates(dataset_type='5%')
+        return jsonify({
+            'success': True,
+            'dates': dates
+        })
+    except Exception as e:
+        logger.exception("IDX ownership dates error")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

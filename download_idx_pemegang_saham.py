@@ -21,8 +21,11 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-os.makedirs(DATA_DIR, exist_ok=True)
+DATA_DIR_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+DATA_DIR_1 = os.path.join(DATA_DIR_BASE, "1persen")
+DATA_DIR_5 = os.path.join(DATA_DIR_BASE, "5persen")
+os.makedirs(DATA_DIR_1, exist_ok=True)
+os.makedirs(DATA_DIR_5, exist_ok=True)
 
 TARGET_URL = "https://www.idx.co.id/id/perusahaan-tercatat/keterbukaan-informasi"
 
@@ -50,7 +53,7 @@ def rename_pdf(filepath, persen, forced_date=None):
     return new_path
 
 
-def setup_driver():
+def setup_driver(download_dir):
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--window-size=1920,1080")
@@ -63,7 +66,7 @@ def setup_driver():
     options.add_experimental_option("useAutomationExtension", False)
 
     prefs = {
-        "download.default_directory": DATA_DIR,
+        "download.default_directory": download_dir,
         "download.prompt_for_download": False,
         "download.directory_upgrade": True,
         "plugins.always_open_pdf_externally": True,
@@ -77,7 +80,7 @@ def setup_driver():
     # Enable downloads in headless mode via CDP
     driver.execute_cdp_cmd("Page.setDownloadBehavior", {
         "behavior": "allow",
-        "downloadPath": DATA_DIR
+        "downloadPath": download_dir
     })
 
     return driver
@@ -85,13 +88,15 @@ def setup_driver():
 
 def download_pdfs(persen="5", start_date=None, end_date=None):
     """Download the Pemegang Saham di atas X% PDFs based on date filters."""
+    target_dir = DATA_DIR_5 if persen == "5" else DATA_DIR_1
     search_keyword = f"{persen}%"
     print(f"Setting up Chrome driver...")
+    print(f"Target directory: {target_dir}")
     print(f"Target: Pemegang Saham di atas {persen}% (KSEI) [Semua Emiten Saham]")
     if start_date and end_date:
         print(f"Date Range: {start_date} to {end_date}")
         
-    driver = setup_driver()
+    driver = setup_driver(target_dir)
     wait = WebDriverWait(driver, 30)
     downloaded_files = []
 
@@ -227,7 +232,7 @@ def download_pdfs(persen="5", start_date=None, end_date=None):
             date_match = re.search(r'(\d{8})', target_text or "")
             expected_file = f"{date_match.group(1)}_Pemegang_Saham_{persen}persen_KSEI.pdf" if date_match else None
             if expected_file:
-                expected_path = os.path.join(DATA_DIR, expected_file)
+                expected_path = os.path.join(target_dir, expected_file)
                 if os.path.exists(expected_path):
                     print(f"File already exists: {expected_file}. Skipping download.")
                     downloaded_files.append(expected_path)
@@ -247,31 +252,31 @@ def download_pdfs(persen="5", start_date=None, end_date=None):
                 if not filename.endswith(".pdf"):
                     filename += ".pdf"
 
-                filepath = os.path.join(DATA_DIR, filename)
+                filepath = os.path.join(target_dir, filename)
                 with open(filepath, "wb") as f:
                     f.write(resp.content)
                 final_path = rename_pdf(filepath, persen)
                 downloaded_files.append(final_path)
             else:
                 print("Direct download blocked. Trying click download...")
-                existing_files = set(os.listdir(DATA_DIR))
+                existing_files = set(os.listdir(target_dir))
                 
                 driver.execute_script("arguments[0].click();", web_link)
                 
                 downloaded = False
                 for i in range(30):
                     time.sleep(1)
-                    current_files = set(os.listdir(DATA_DIR))
+                    current_files = set(os.listdir(target_dir))
                     new_files = current_files - existing_files
                     completed = [f for f in new_files if f.endswith('.pdf') and not f.endswith('.crdownload')]
                     if completed:
                         junk = [f for f in new_files if not f.endswith('.pdf') or f.endswith('.crdownload')]
                         for jf in junk:
                             try:
-                                os.remove(os.path.join(DATA_DIR, jf))
+                                os.remove(os.path.join(target_dir, jf))
                             except:
                                 pass
-                        filepath = os.path.join(DATA_DIR, completed[0])
+                        filepath = os.path.join(target_dir, completed[0])
                         final_path = rename_pdf(filepath, persen)
                         downloaded_files.append(final_path)
                         downloaded = True
@@ -286,10 +291,10 @@ def download_pdfs(persen="5", start_date=None, end_date=None):
         traceback.print_exc()
     finally:
         # Clean up residual temp files
-        for f in os.listdir(DATA_DIR):
+        for f in os.listdir(target_dir):
             if f.endswith('.crdownload') or f == 'downloads.htm':
                 try:
-                    os.remove(os.path.join(DATA_DIR, f))
+                    os.remove(os.path.join(target_dir, f))
                 except:
                     pass
         driver.quit()

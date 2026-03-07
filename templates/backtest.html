@@ -4,7 +4,8 @@
 {% block description %}Test trading strategies on IDX historical data with RSI, MACD, EMA Cross, and combined strategies.{% endblock %}
 
 {% block head_styles %}
-<style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=4">
+    <style>
     /* ── Backtest Page Styles ── */
     .bt-header { text-align: center; margin-bottom: 28px; }
     .bt-header__badge {

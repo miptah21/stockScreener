@@ -4,7 +4,8 @@
 {% block description %}Real-time IDX market overview: IHSG index, top gainers/losers, sector performance, and market breadth.{% endblock %}
 
 {% block head_styles %}
-<style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}?v=4">
+    <style>
     /* ── Market Overview Page Styles ── */
     .mo-header { text-align: center; margin-bottom: 32px; }
     .mo-header__badge {
